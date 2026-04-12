@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pandas
+nltk
+python-docx
+gradio
+plotly
+requests
+pytest

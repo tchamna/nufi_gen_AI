@@ -1,0 +1,66 @@
+.clafrica-insert-palette-wrap {
+  margin-top: 10px;
+  width: 100%;
+}
+
+.clafrica-insert-palette-hint {
+  font-size: 12px;
+  margin: 0 0 8px;
+  opacity: 0.88;
+  line-height: 1.35;
+}
+
+.clafrica-insert-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  max-height: 140px;
+  overflow-y: auto;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.app[data-theme="dark"] .clafrica-insert-palette {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.clafrica-insert-char {
+  font-size: 1.05rem;
+  line-height: 1.2;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  background: transparent;
+  color: inherit;
+  min-width: 28px;
+}
+
+.app[data-theme="dark"] .clafrica-insert-char {
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.clafrica-insert-char:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.app[data-theme="dark"] .clafrica-insert-char:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.clafrica-insert-char:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.detector-hero-toggles {
+  margin-top: 12px;
+  justify-content: flex-start;
+}
+
+.detector-card .clafrica-insert-palette-wrap {
+  margin-top: 12px;
+}

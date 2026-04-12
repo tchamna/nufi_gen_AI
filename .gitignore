@@ -1,0 +1,39 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Env / local
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Android (keep source; ignore build outputs)
+android-keyboard/**/build/
+android-keyboard/**/.gradle/
+android-keyboard/local.properties
+*.apk
+*.aab
+*.keystore
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Logs / temp
+*.log
+npm-debug.log*

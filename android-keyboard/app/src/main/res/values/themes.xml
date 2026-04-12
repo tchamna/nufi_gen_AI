@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.NufiKeyboard" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:statusBarColor" tools:targetApi="l">#FFFFFF</item>
+    </style>
+
+    <!-- InputMethodService must use an IME theme; Material3 on the service breaks touch/draw for many devices. -->
+    <style name="Theme.NufiIME" parent="@android:style/Theme.InputMethod" />
+</resources>

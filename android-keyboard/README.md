@@ -1,0 +1,50 @@
+# Android Keyboard Client
+
+This folder contains a minimal Android IME client for the Nufi suggestion API.
+
+## What it does
+
+- shows a QWERTY keyboard (letters + number row)
+- applies **Clafrica** shortcuts (same rules as `clafricaMapping.ts`) from bundled `assets/clafrica.json` after each key
+- fetches next-word suggestions from `POST /api/keyboard/suggest`
+- lets the user tap a suggestion to insert it into the current field
+- stores the API base URL in shared preferences
+
+## Expected API URL
+
+Default:
+
+`http://10.0.2.2:8010`
+
+Use that for the Android emulator. For a physical device, replace `10.0.2.2` with the IP address of the machine running the FastAPI app.
+
+## Run order
+
+1. Start the Python API from the repo root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run_app.ps1
+```
+
+2. Open `android-keyboard` in Android Studio.
+3. Let Gradle sync.
+4. Install the app on an emulator or device.
+5. Open the app and save the correct API URL.
+6. Enable `Nufi Keyboard` in Android keyboard settings.
+7. Switch the active keyboard to `Nufi Keyboard`.
+
+## Updating the Clafrica map
+
+When `clafricaMapping.ts` changes, regenerate the JSON asset from the repo root:
+
+```powershell
+npx tsx -e "import { Clafrica } from './clafricaMapping.ts'; import * as fs from 'fs'; fs.writeFileSync('android-keyboard/app/src/main/assets/clafrica.json', JSON.stringify(Clafrica), 'utf8');"
+```
+
+Then rebuild the APK.
+
+## Notes
+
+- This is a first IME scaffold, not a finished production keyboard.
+- The keyboard layout is intentionally small and simple.
+- Suggestions currently use `n = 4` and a limit of 5 in the IME service.

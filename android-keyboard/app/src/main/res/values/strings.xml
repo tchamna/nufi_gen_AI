@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Nufi Keyboard</string>
+    <string name="ime_name">Nufi Keyboard</string>
+    <string name="ime_subtype_label">Nufi keyboard</string>
+    <string name="setup_title">Nufi keyboard setup</string>
+    <string name="setup_body">Point the keyboard to your running Nufi API, enable the keyboard in Android settings, then choose it as the active input method.</string>
+    <string name="base_url_hint">http://10.0.2.2:8010</string>
+    <string name="save_settings">Save API URL</string>
+    <string name="open_keyboard_settings">Open keyboard settings</string>
+    <string name="choose_keyboard">Choose keyboard</string>
+    <string name="base_url_required">Enter an API URL first.</string>
+    <string name="settings_saved">Keyboard settings saved.</string>
+    <string name="fetching_suggestions">Fetching suggestions...</string>
+    <string name="suggestion_error">Could not fetch suggestions.</string>
+    <string name="no_suggestions">No suggestions</string>
+    <string name="suggestion_context_template">Context words used: %1$d</string>
+</resources>
