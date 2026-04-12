@@ -14,6 +14,7 @@ class KeyboardSettings(context: Context) {
     companion object {
         private const val PREFS_NAME = "nufi_keyboard_settings"
         private const val KEY_BASE_URL = "base_url"
-        const val DEFAULT_BASE_URL = "http://10.0.2.2:8010"
+        const val DEFAULT_BASE_URL =
+            "https://nufi-gen-ai-dug3ggdsh3fze9e5.canadacentral-01.azurewebsites.net"
     }
 }

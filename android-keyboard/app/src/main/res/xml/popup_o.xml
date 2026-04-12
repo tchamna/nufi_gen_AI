@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Keyboard xmlns:android="http://schemas.android.com/apk/res/android"
+    android:keyHeight="56dp"
+    android:keyWidth="10%p">
+    <Row>
+        <Key android:codes="242" android:keyLabel="ò" />
+        <Key android:codes="243" android:keyLabel="ó" />
+        <Key android:codes="333" android:keyLabel="ō" />
+        <Key android:codes="466" android:keyLabel="ǒ" />
+        <Key android:codes="244" android:keyLabel="ô" />
+    </Row>
+    <Row>
+        <Key android:codes="303" android:keyLabel="ɔ" />
+        <Key android:codes="2021" android:keyOutputText="ɔ̀" android:keyLabel="ɔ̀" />
+        <Key android:codes="2022" android:keyOutputText="ɔ́" android:keyLabel="ɔ́" />
+        <Key android:codes="2023" android:keyOutputText="ɔ̄" android:keyLabel="ɔ̄" />
+        <Key android:codes="2024" android:keyOutputText="ɔ̌" android:keyLabel="ɔ̌" />
+        <Key android:codes="2025" android:keyOutputText="ɔ̂" android:keyLabel="ɔ̂" />
+    </Row>
+</Keyboard>

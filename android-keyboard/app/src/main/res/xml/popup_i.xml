@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Keyboard xmlns:android="http://schemas.android.com/apk/res/android"
+    android:keyHeight="56dp"
+    android:keyWidth="16%p">
+    <Row>
+        <Key android:codes="616" android:keyLabel="ɨ" />
+        <Key android:codes="2016" android:keyOutputText="ɨ̀" android:keyLabel="ɨ̀" />
+        <Key android:codes="2017" android:keyOutputText="ɨ́" android:keyLabel="ɨ́" />
+        <Key android:codes="2018" android:keyOutputText="ɨ̄" android:keyLabel="ɨ̄" />
+        <Key android:codes="2019" android:keyOutputText="ɨ̌" android:keyLabel="ɨ̌" />
+        <Key android:codes="2020" android:keyOutputText="ɨ̂" android:keyLabel="ɨ̂" />
+    </Row>
+</Keyboard>

@@ -34,6 +34,29 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
     private val mainHandler = Handler(Looper.getMainLooper())
     private var shiftEnabled = false
     private var suggestJob: Job? = null
+    private var isLongPress = false
+    private var shouldClafrica = false
+
+    private val customCodes = mapOf(
+        2001 to "ɑ̀", 2002 to "ɑ́", 2003 to "ɑ̄", 2004 to "ɑ̌", 2005 to "ɑ̂",
+        2006 to "ɛ̀", 2007 to "ɛ́", 2008 to "ɛ̄", 2009 to "ɛ̌", 2010 to "ɛ̂",
+        2011 to "ə̀", 2012 to "ə́", 2013 to "ə̄", 2014 to "ə̌", 2015 to "ə̂",
+        2016 to "ɨ̀", 2017 to "ɨ́", 2018 to "ɨ̄", 2019 to "ɨ̌", 2020 to "ɨ̂",
+        2021 to "ɔ̀", 2022 to "ɔ́", 2023 to "ɔ̄", 2024 to "ɔ̌", 2025 to "ɔ̂",
+        2026 to "ʉ̀", 2027 to "ʉ́", 2028 to "ʉ̄", 2029 to "ʉ̌", 2030 to "ʉ̂"
+    )
+
+    private val longPressRunnable = Runnable {
+        isLongPress = true
+        val ic = currentInputConnection
+        if (ic != null) {
+            ic.beginBatchEdit()
+            val before = ic.getTextBeforeCursor(10000, 0)
+            val after = ic.getTextAfterCursor(10000, 0)
+            ic.deleteSurroundingText(before?.length ?: 0, after?.length ?: 0)
+            ic.endBatchEdit()
+        }
+    }
 
     private val suggestRunnable = Runnable {
         if (::suggestionStrip.isInitialized && ::statusView.isInitialized) {
@@ -93,11 +116,13 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
     override fun onKey(primaryCode: Int, keyCodes: IntArray?) {
         if (!::keyboardView.isInitialized) return
         val inputConnection = currentInputConnection ?: return
-        var shouldClafrica = false
+        shouldClafrica = false
         when (primaryCode) {
             Keyboard.KEYCODE_DELETE -> {
-                inputConnection.deleteSurroundingText(1, 0)
-                shouldClafrica = true
+                if (!isLongPress) {
+                    inputConnection.deleteSurroundingText(1, 0)
+                    shouldClafrica = true
+                }
             }
             Keyboard.KEYCODE_SHIFT -> {
                 shiftEnabled = !shiftEnabled
@@ -110,12 +135,32 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
                 shouldClafrica = true
             }
             else -> {
-                val character = when {
-                    primaryCode <= 0 -> return
-                    shiftEnabled -> primaryCode.toChar().uppercaseChar()
-                    else -> primaryCode.toChar()
+                val customString = customCodes[primaryCode]
+                if (customString != null) {
+                    val text = if (shiftEnabled) {
+                        customString.map { ch ->
+                            when (ch) {
+                                'ɑ' -> 'Ɑ'
+                                'ɛ' -> 'Ɛ'
+                                'ə' -> 'Ə'
+                                'ɨ' -> 'Ɨ'
+                                'ɔ' -> 'Ɔ'
+                                'ʉ' -> 'Ʉ'
+                                else -> ch.uppercaseChar()
+                            }
+                        }.joinToString("")
+                    } else {
+                        customString
+                    }
+                    inputConnection.commitText(text, 1)
+                } else {
+                    val character = when {
+                        primaryCode <= 0 -> return
+                        shiftEnabled -> primaryCode.toChar().uppercaseChar()
+                        else -> primaryCode.toChar()
+                    }
+                    inputConnection.commitText(character.toString(), 1)
                 }
-                inputConnection.commitText(character.toString(), 1)
                 if (shiftEnabled) {
                     shiftEnabled = false
                     keyboardView.isShifted = false
@@ -157,9 +202,46 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
         requestShowSelf(InputMethodManager.SHOW_IMPLICIT)
     }
 
-    override fun onPress(primaryCode: Int) = Unit
-    override fun onRelease(primaryCode: Int) = Unit
-    override fun onText(text: CharSequence?) = Unit
+    override fun onPress(primaryCode: Int) {
+        if (primaryCode == Keyboard.KEYCODE_DELETE) {
+            isLongPress = false
+            mainHandler.postDelayed(longPressRunnable, 500)
+        }
+    }
+
+    override fun onRelease(primaryCode: Int) {
+        if (primaryCode == Keyboard.KEYCODE_DELETE) {
+            mainHandler.removeCallbacks(longPressRunnable)
+        }
+    }
+    override fun onText(text: CharSequence?) {
+        val inputConnection = currentInputConnection ?: return
+        if (text == null) return
+
+        var output = text.toString()
+        if (shiftEnabled) {
+            output = output.map { ch ->
+                when (ch) {
+                    'ɑ' -> 'Ɑ'
+                    'ɛ' -> 'Ɛ'
+                    'ə' -> 'Ə'
+                    'ɨ' -> 'Ɨ'
+                    'ɔ' -> 'Ɔ'
+                    'ʉ' -> 'Ʉ'
+                    else -> ch.uppercaseChar()
+                }
+            }.joinToString("")
+        }
+
+        inputConnection.commitText(output, 1)
+
+        if (shiftEnabled) {
+            shiftEnabled = false
+            keyboardView.isShifted = false
+            keyboardView.invalidateAllKeys()
+        }
+        scheduleClafricaApply()
+    }
     override fun swipeLeft() = Unit
     override fun swipeRight() = Unit
     override fun swipeDown() = Unit

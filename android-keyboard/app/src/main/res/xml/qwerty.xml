@@ -21,20 +21,20 @@
     <Row>
         <Key android:codes="113" android:keyLabel="q" />
         <Key android:codes="119" android:keyLabel="w" />
-        <Key android:codes="101" android:keyLabel="e" />
+        <Key android:codes="101" android:keyLabel="e" android:popupKeyboard="@xml/popup_e" android:popupCharacters="èéēěêɛ̀έɛ̄ɛ̌ɛ̂ə̀ə́ə̄ə̌ə̂" />
         <Key android:codes="114" android:keyLabel="r" />
         <Key android:codes="116" android:keyLabel="t" />
         <Key android:codes="121" android:keyLabel="y" />
-        <Key android:codes="117" android:keyLabel="u" />
-        <Key android:codes="105" android:keyLabel="i" />
-        <Key android:codes="111" android:keyLabel="o" />
+        <Key android:codes="117" android:keyLabel="u" android:popupKeyboard="@xml/popup_u" android:popupCharacters="ʉʉ̀ʉ́ʉ̄ʉ̌ʉ̂" />
+        <Key android:codes="105" android:keyLabel="i" android:popupKeyboard="@xml/popup_i" android:popupCharacters="ɨɨ̀ɨ́ɨ̄ɨ̌ɨ̂" />
+        <Key android:codes="111" android:keyLabel="o" android:popupKeyboard="@xml/popup_o" android:popupCharacters="ɔɔ̀ɔ́ɔ̄ɔ̌ɔ̂" />
         <Key android:codes="112" android:keyLabel="p" />
     </Row>
 
     <Row>
-        <Key android:codes="97" android:keyLabel="a" android:keyEdgeFlags="left" android:keyWidth="11%p" />
+        <Key android:codes="97" android:keyLabel="a" android:keyEdgeFlags="left" android:keyWidth="11%p" android:popupKeyboard="@xml/popup_a" android:popupCharacters="àáāǎâɑɑ̀ɑ́ɑ̄ɑ̌ɑ̂" />
         <Key android:codes="115" android:keyLabel="s" android:keyWidth="11%p" />
-        <Key android:codes="100" android:keyLabel="d" android:keyWidth="11%p" />
+        <Key android:codes="100" android:keyLabel="d" android:keyWidth="11%p" android:popupKeyboard="@xml/popup_d" android:popupCharacters="ɗ" />
         <Key android:codes="102" android:keyLabel="f" android:keyWidth="11%p" />
         <Key android:codes="103" android:keyLabel="g" android:keyWidth="11%p" />
         <Key android:codes="104" android:keyLabel="h" android:keyWidth="11%p" />
@@ -47,18 +47,18 @@
         <Key android:codes="-1" android:keyLabel="shift" android:keyWidth="15%p" android:keyEdgeFlags="left" />
         <Key android:codes="122" android:keyLabel="z" android:keyWidth="8.5%p" />
         <Key android:codes="120" android:keyLabel="x" android:keyWidth="8.5%p" />
-        <Key android:codes="99" android:keyLabel="c" android:keyWidth="8.5%p" />
+        <Key android:codes="99" android:keyLabel="c" android:keyWidth="8.5%p" android:popupKeyboard="@xml/popup_c" android:popupCharacters="ç" />
         <Key android:codes="118" android:keyLabel="v" android:keyWidth="8.5%p" />
-        <Key android:codes="98" android:keyLabel="b" android:keyWidth="8.5%p" />
-        <Key android:codes="110" android:keyLabel="n" android:keyWidth="8.5%p" />
+        <Key android:codes="98" android:keyLabel="b" android:keyWidth="8.5%p" android:popupKeyboard="@xml/popup_b" android:popupCharacters="ɓ" />
+        <Key android:codes="110" android:keyLabel="n" android:keyWidth="8.5%p" android:popupKeyboard="@xml/popup_n" android:popupCharacters="ŋɲ" />
         <Key android:codes="109" android:keyLabel="m" android:keyWidth="8.5%p" />
         <Key android:codes="39" android:keyLabel="'" android:keyWidth="8.5%p" />
-        <Key android:codes="-5" android:keyLabel="del" android:keyWidth="15%p" android:keyEdgeFlags="right" />
+        <Key android:codes="-5" android:keyLabel="←" android:keyWidth="15%p" android:keyEdgeFlags="right" />
     </Row>
 
     <Row>
         <Key android:codes="44" android:keyLabel="," android:keyWidth="18%p" android:keyEdgeFlags="left" />
-        <Key android:codes="32" android:keyLabel="space" android:keyWidth="44%p" />
+        <Key android:codes="32" android:keyLabel="Clafrica" android:keyWidth="44%p" />
         <Key android:codes="46" android:keyLabel="." android:keyWidth="18%p" />
         <Key android:codes="-4" android:keyLabel="enter" android:keyWidth="20%p" android:keyEdgeFlags="right" />
     </Row>

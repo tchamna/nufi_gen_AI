@@ -5,12 +5,153 @@ import random
 import re
 import unicodedata
 
+from nufi_bana_classification import normalize_bana_to_standard, normalize_ton_bas
+from nufi_bana_standard_maps import dict_ton_bas
 
 DEFAULT_ORDER = 4
+
+# Inverse of dict_ton_bas for vowel bases only: bare vowel → low-tone form (lookup when user omits accents).
+_VOWEL_BASES = frozenset(
+    "aeiouAEIOU"
+    "\u0251\u0254\u0259\u025b\u0289"  # ɑ ɔ ə ɛ ʉ
+    "\u0186\u0190\u018f"  # Ɔ Ɛ Ə
+)
+
+
+def _build_bare_vowel_to_low_tone() -> dict[str, str]:
+    out: dict[str, str] = {}
+    for k, v in dict_ton_bas.items():
+        if k == v:
+            continue
+        low = unicodedata.normalize("NFC", k)
+        base = unicodedata.normalize("NFC", v)
+        if len(base) != 1 or base not in _VOWEL_BASES:
+            continue
+        if base not in out:
+            out[base] = low
+    return out
+
+
+_BARE_VOWEL_TO_LOW_TONE = _build_bare_vowel_to_low_tone()
+
+
+def _has_tone_or_diacritic(s: str) -> bool:
+    for ch in s:
+        if unicodedata.category(ch) == "Mn":
+            return True
+        name = unicodedata.name(ch, "")
+        if any(
+            x in name
+            for x in (
+                "WITH GRAVE",
+                "WITH ACUTE",
+                "WITH CIRCUMFLEX",
+                "WITH CARON",
+                "WITH MACRON",
+                "WITH DOUBLE GRAVE",
+                "WITH DOT BELOW",
+                "WITH TILDE",
+                "WITH MIDDLE TILDE",
+            )
+        ):
+            return True
+    return False
+
+
+def _first_bare_vowel_to_low_tone_word(word: str) -> str | None:
+    """If the word has no tone marks, map the first bare vowel to low tone (ton bas)."""
+    if not word or _has_tone_or_diacritic(word):
+        return None
+    w = unicodedata.normalize("NFC", word)
+    for i, ch in enumerate(w):
+        if ch in _BARE_VOWEL_TO_LOW_TONE:
+            low = _BARE_VOWEL_TO_LOW_TONE[ch]
+            return unicodedata.normalize("NFC", w[:i] + low + w[i + 1 :])
+    return None
+
+
+def _word_nufi_display_priority(word: str) -> int:
+    """Higher = prefer when breaking equal-probability ties (Nufi letters over bare ASCII)."""
+    if not word:
+        return 0
+    n = 0
+    for ch in word:
+        if ord(ch) > 127:
+            n += 1
+        elif unicodedata.category(ch) == "Mn":
+            n += 1
+    return n
+
+
+def _tokens_assume_low_tone_bare_vowels(tokens: list[str]) -> tuple[list[str], bool]:
+    out: list[str] = []
+    changed = False
+    for t in tokens:
+        nxt = _first_bare_vowel_to_low_tone_word(t)
+        if nxt is not None:
+            out.append(nxt)
+            changed = True
+        else:
+            out.append(t)
+    return out, changed
+
+
 DEFAULT_MAX_TOKENS = 40
 DEFAULT_NUM_CANDIDATES = 5
 DEFAULT_TEMPERATURE = 1.0
 EXTERNAL_NUFI_ONLY_DIR = r"G:\My Drive\Data_Science\DataSets\Nufi\Nufi_Documents\Nufi_Only"
+
+# Dictionary / gloss lines in vocabulary sources (French meta text, not Nufi).
+_FRENCH_META_SUBSTRINGS = (
+    "français",
+    "francais",
+    "expression française",
+    "expression francaise",
+    "correspond en français",
+    "correspond en francais",
+    "correspond en français",
+    "traduit en français",
+    "traduit en francais",
+    "ce qui correspond",
+    "cela correspond",
+    "expression correspondant",
+    "il se traduit",
+    "l'expression correspondante",
+    "l'expression française",
+    "terme utilisé pour",
+    "terme utilise pour",
+    "en français camerounais",
+    "déplorer la situation",
+    "deplorer la situation",
+)
+
+
+def _text_has_french_meta(s: str) -> bool:
+    t = s.lower()
+    return any(sub in t for sub in _FRENCH_META_SUBSTRINGS)
+
+
+def _exclude_sentence_for_nufi_only(raw: str, cleaned: str) -> bool:
+    """Return True to drop a sentence (French dictionary gloss lines).
+
+    Uses substring checks only — do not call langdetect here: it runs per line and
+    makes startup unusably slow on large corpora (100k+ lines).
+    """
+    if _text_has_french_meta(raw) or _text_has_french_meta(cleaned):
+        return True
+    return False
+
+
+# Latin "nota bene": after clean_text, "n. b." becomes two tokens "n" and "b", which
+# trains a spurious n→b bigram. "n.b." collapses to one token "nb" and does not do that.
+_RE_NOTA_BENE = re.compile(r"\bn\.\s*b\.", re.IGNORECASE)
+
+
+def _strip_nota_bene_markers(text: str) -> str:
+    """Remove N.B. / N. B. markers from raw lines before clean_text (corpus only)."""
+    if not text:
+        return text
+    return _RE_NOTA_BENE.sub("", text)
 
 
 def simple_ngrams(sentence, n, pad_left=True, pad_right=True):
@@ -44,17 +185,22 @@ def normalize_text(text):
 
     text = repair_mojibake(text)
     text = text.replace("\ufeff", "")
+    # Unify apostrophe-like characters so Bana maps (keys use ASCII ') match corpus tokens.
     text = (
         text.replace("\u2018", "'")
         .replace("\u2019", "'")
         .replace("\u0060", "'")
         .replace("\u00b4", "'")
+        .replace("\u02bc", "'")  # modifier letter apostrophe (common next to ə in orthography)
     )
     return unicodedata.normalize("NFC", text)
 
 
-def clean_text(text, punct=None):
+def clean_text(text, punct=None, apply_ton_bas=True):
     text = normalize_text(text)
+    text = normalize_bana_to_standard(text)
+    if apply_ton_bas:
+        text = normalize_ton_bas(text)
     text = text.lower()
     if punct is None:
         punct = [".", ",", ";", ":", "!", "?"]
@@ -193,8 +339,10 @@ def load_corpus_bundle(base_dir=None):
     seen = set()
 
     for record in records:
-        cleaned = clean_text(record["text"])
+        cleaned = clean_text(_strip_nota_bene_markers(record["text"]))
         if not cleaned:
+            continue
+        if _exclude_sentence_for_nufi_only(record["text"], cleaned):
             continue
         _append_source(sentence_sources, cleaned, record)
         if cleaned not in seen:
@@ -467,6 +615,23 @@ def suggest_next_words(model, text, n=DEFAULT_ORDER, limit=5):
     context_length = _requested_context_length(model, n)
     choices, used_context = _find_choices_with_length(model, tokens, context_length)
 
+    # Older pickles may still index contexts under tone-marked tokens (e.g. "pèn") while
+    # clean_text maps "pèn" → "pen". Retry lookup without dict_ton_bas when no match.
+    if not choices:
+        legacy_tokens = clean_text(text, apply_ton_bas=False).split()
+        if legacy_tokens != tokens:
+            choices, used_context = _find_choices_with_length(
+                model, legacy_tokens, context_length
+            )
+
+    # "pen" ↔ "pèn", "la'" ↔ "là'": if user omits tone, assume low (ton bas) for lookup.
+    if not choices:
+        assumed_tokens, changed = _tokens_assume_low_tone_bare_vowels(tokens)
+        if changed:
+            choices, used_context = _find_choices_with_length(
+                model, assumed_tokens, context_length
+            )
+
     if not choices:
         return {
             "normalized_text": normalized_text,
@@ -480,7 +645,43 @@ def suggest_next_words(model, text, n=DEFAULT_ORDER, limit=5):
             for word, probability in choices.items()
             if word is not None
         ),
-        key=lambda item: item["probability"],
+        key=lambda item: (
+            item["probability"],
+            _word_nufi_display_priority(item["word"]),
+        ),
+        reverse=True,
+    )
+
+    # Model keys may still use legacy tone marks; align display with clean_text / ton_bas.
+    for item in ranked:
+        item["word"] = clean_text(item["word"])
+
+    # Older pickles or merged n-grams can keep two keys (e.g. "lah" and "làh") that collapse
+    # to the same display form — merge probabilities so the UI does not show duplicates.
+    merged = {}
+    for item in ranked:
+        w = item["word"]
+        if w not in merged:
+            merged[w] = {"word": w, "probability": item["probability"]}
+        else:
+            merged[w]["probability"] += item["probability"]
+
+    # Old pickles may still map ("n",) -> b with probability 1.0 from Latin "N. B." lines
+    # (see _strip_nota_bene_markers). Drop that lone spurious continuation at inference.
+    if (
+        len(tokens) == 1
+        and tokens[0] == "n"
+        and len(merged) == 1
+        and "b" in merged
+    ):
+        merged.pop("b", None)
+
+    ranked = sorted(
+        merged.values(),
+        key=lambda item: (
+            item["probability"],
+            _word_nufi_display_priority(item["word"]),
+        ),
         reverse=True,
     )
 

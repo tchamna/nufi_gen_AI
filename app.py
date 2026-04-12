@@ -1,4 +1,5 @@
 import os
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -87,22 +88,33 @@ def _model_needs_rebuild(model_path):
     return not key_lengths or min(key_lengths) > 1
 
 
+def _startup_log(msg: str) -> None:
+    """Visible while uvicorn prints 'Waiting for application startup' (corpus/model can take minutes)."""
+    print(f"[startup] {msg}", file=sys.stderr, flush=True)
+
+
 def _load_api_model(tokens):
     if _model_needs_rebuild(MODEL_PATH):
+        _startup_log("Rebuilding n-gram model (this can take several minutes)...")
         model = nm.build_combined_model(tokens, max_n=5)
         nm.save_model(model, MODEL_PATH)
+        _startup_log("Model saved.")
         return model
+    _startup_log("Loading model from pickle...")
     return nm.load_model(MODEL_PATH)
 
 
 def load_runtime_state():
     global CLEANED, CLEANED_SET, TOKENS, MODEL, SENTENCE_SOURCES
+    _startup_log("Loading and cleaning corpus (large files may take a few minutes)...")
     bundle = nm.load_corpus_bundle(BASE_DIR)
     CLEANED = bundle["cleaned"]
     TOKENS = bundle["tokens"]
     SENTENCE_SOURCES = bundle["sentence_sources"]
     CLEANED_SET = set(CLEANED)
+    _startup_log(f"Corpus: {len(CLEANED)} sentences, {sum(len(t) for t in TOKENS)} tokens.")
     MODEL = _load_api_model(TOKENS)
+    _startup_log("Ready.")
 
 
 @asynccontextmanager

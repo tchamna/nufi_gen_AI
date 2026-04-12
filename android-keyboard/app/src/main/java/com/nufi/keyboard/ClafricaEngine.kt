@@ -87,9 +87,6 @@ class ClafricaEngine(context: Context) {
         return null
     }
 
-    private fun escapeRegex(s: String): String =
-        s.replace(Regex("[.*+?^${'$'}{}()|\\[\\]\\\\\\\\]"), "\\\\$0")
-
     private fun applyClafricaMappingToToken(token: String): String {
         if (token.isEmpty()) return token
 
@@ -122,18 +119,12 @@ class ClafricaEngine(context: Context) {
             changed = false
             for (key in allKeysSorted) {
                 if (key.length > result.length) continue
-                val escaped = escapeRegex(key)
-                val insens = isAsciiOnlyShortcut(key)
-                val probe = if (insens) {
-                    Pattern.compile(escaped, Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE).matcher(result)
-                } else {
-                    Pattern.compile(escaped).matcher(result)
-                }
+                val escaped = Pattern.quote(key)
+                val probe = Pattern.compile(escaped).matcher(result)
                 if (!probe.find()) continue
 
                 val value = map[key]!!
-                val flags = if (insens) Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE else 0
-                val newResult = Pattern.compile(escaped, flags).matcher(result).replaceAll(
+                val newResult = probe.replaceAll(
                     java.util.regex.Matcher.quoteReplacement(value)
                 )
                 if (newResult != result) {

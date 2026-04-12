@@ -12,11 +12,13 @@ This folder contains a minimal Android IME client for the Nufi suggestion API.
 
 ## Expected API URL
 
-Default:
+**Default (production):** the Azure App Service URL (HTTPS), e.g.
 
-`http://10.0.2.2:8010`
+`https://nufi-gen-ai-dug3ggdsh3fze9e5.canadacentral-01.azurewebsites.net`
 
-Use that for the Android emulator. For a physical device, replace `10.0.2.2` with the IP address of the machine running the FastAPI app.
+Set in **KeyboardSettings** / launcher screen; no trailing slash. The keyboard calls `POST {base}/api/keyboard/suggest`.
+
+**Local API:** use `http://10.0.2.2:8010` on the Android emulator, or `http://<your-PC-LAN-IP>:8010` on a physical device, and save it in the launcher app.
 
 ## Run order
 
