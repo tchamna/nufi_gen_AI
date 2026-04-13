@@ -9,18 +9,18 @@
         <Key android:codes="283" android:keyLabel="ě" />
         <Key android:codes="234" android:keyLabel="ê" />
         <Key android:codes="603" android:keyLabel="ɛ" />
-        <Key android:codes="2006" android:keyOutputText="ɛ̀" android:keyLabel="ɛ̀" />
-        <Key android:codes="2007" android:keyOutputText="έ" android:keyLabel="έ" />
+        <Key android:codes="2006" android:keyLabel="ɛ̀" />
+        <Key android:codes="2007" android:keyLabel="ɛ́" />
     </Row>
     <Row>
-        <Key android:codes="2008" android:keyOutputText="ɛ̄" android:keyLabel="ɛ̄" />
-        <Key android:codes="2009" android:keyOutputText="ɛ̌" android:keyLabel="ɛ̌" />
-        <Key android:codes="2010" android:keyOutputText="ɛ̂" android:keyLabel="ɛ̂" />
+        <Key android:codes="2008" android:keyLabel="ɛ̄" />
+        <Key android:codes="2009" android:keyLabel="ɛ̌" />
+        <Key android:codes="2010" android:keyLabel="ɛ̂" />
         <Key android:codes="601" android:keyLabel="ə" />
-        <Key android:codes="2011" android:keyOutputText="ə̀" android:keyLabel="ə̀" />
-        <Key android:codes="2012" android:keyOutputText="ə́" android:keyLabel="ə́" />
-        <Key android:codes="2013" android:keyOutputText="ə̄" android:keyLabel="ə̄" />
-        <Key android:codes="2014" android:keyOutputText="ə̌" android:keyLabel="ə̌" />
-        <Key android:codes="2015" android:keyOutputText="ə̂" android:keyLabel="ə̂" />
+        <Key android:codes="2011" android:keyLabel="ə̀" />
+        <Key android:codes="2012" android:keyLabel="ə́" />
+        <Key android:codes="2013" android:keyLabel="ə̄" />
+        <Key android:codes="2014" android:keyLabel="ə̌" />
+        <Key android:codes="2015" android:keyLabel="ə̂" />
     </Row>
 </Keyboard>

@@ -119,12 +119,48 @@
         color: #9f1c22;
         font-size: 14px;
       }
+
+      .clafrica-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+        font-size: 14px;
+      }
+
+      .clafrica-row input[type="checkbox"] {
+        width: 1.1rem;
+        height: 1.1rem;
+        accent-color: #0f8a63;
+        cursor: pointer;
+      }
+
+      .clafrica-row label {
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .clafrica-hint {
+        margin: 6px 0 0;
+        font-size: 12px;
+        color: #5a5a52;
+        line-height: 1.35;
+      }
     </style>
   </head>
   <body>
     <main class="panel">
       <label for="seed">Seed text</label>
       <textarea id="seed" spellcheck="false" aria-label="Seed text"></textarea>
+
+      <div class="clafrica-row">
+        <input type="checkbox" id="clafrica" checked />
+        <label for="clafrica">Clafrica shortcuts</label>
+      </div>
+      <p class="clafrica-hint" id="clafrica-hint" hidden>
+        Type Latin shortcuts (e.g. <code>af</code>, <code>eu</code>); text is mapped to Nufi characters as you type.
+        Turning this on also finalizes any unfinished shortcuts in the box.
+      </p>
 
       <!-- Defaults for API (no visible settings UI) -->
       <input type="hidden" id="n" value="4" />
@@ -146,147 +182,6 @@
       ></ul>
     </main>
 
-    <script>
-      const DEFAULT_SEED = "ng\u0251\u030c y\u00fa'";
-      const keyboardSuggestCache = new Map();
-
-      const seedEl = document.getElementById("seed");
-      const nEl = document.getElementById("n");
-      const numCandidatesEl = document.getElementById("numCandidates");
-      const maxTokensEl = document.getElementById("maxTokens");
-      const temperatureEl = document.getElementById("temperature");
-      const matchLimitEl = document.getElementById("matchLimit");
-      const goEl = document.getElementById("go");
-      const suggestEl = document.getElementById("suggest");
-      const suggestionsEl = document.getElementById("suggestions");
-
-      seedEl.value = DEFAULT_SEED;
-
-      function readGenerateSettings() {
-        return {
-          text: seedEl.value,
-          n: parseInt(nEl.value || "4", 10),
-          num_candidates: parseInt(numCandidatesEl.value || "5", 10),
-          max_tokens: parseInt(maxTokensEl.value || "40", 10),
-          temperature: parseFloat(temperatureEl.value || "1"),
-          match_limit: parseInt(matchLimitEl.value || "8", 10),
-          max_sources_per_match: 3
-        };
-      }
-
-      function readKeyboardSuggestSettings() {
-        return {
-          text: seedEl.value,
-          n: parseInt(nEl.value || "4", 10),
-          limit: 8
-        };
-      }
-
-      function appendSuggestion(word) {
-        const current = seedEl.value.trim();
-        seedEl.value = current ? `${current} ${word}` : word;
-      }
-
-      function renderSuggestions(payload, errorMessage) {
-        suggestionsEl.innerHTML = "";
-        if (errorMessage) {
-          const li = document.createElement("li");
-          li.className = "error-text";
-          li.textContent = errorMessage;
-          suggestionsEl.appendChild(li);
-          return;
-        }
-
-        if (!payload.suggestions || !payload.suggestions.length) {
-          const li = document.createElement("li");
-          li.className = "empty";
-          li.textContent = "No suggestions for this seed.";
-          suggestionsEl.appendChild(li);
-          return;
-        }
-
-        payload.suggestions.forEach((suggestion) => {
-          const li = document.createElement("li");
-          const button = document.createElement("button");
-          button.type = "button";
-          button.className = "suggestion";
-          const p = suggestion.score ?? suggestion.probability ?? 0;
-          const word = suggestion.word;
-          button.textContent = word;
-          button.title = typeof p === "number" ? `p ≈ ${p.toFixed(4)}` : "";
-          button.addEventListener("click", async () => {
-            appendSuggestion(word);
-            await fetchKeyboardSuggestions();
-          });
-          li.appendChild(button);
-          suggestionsEl.appendChild(li);
-        });
-      }
-
-      async function fetchKeyboardSuggestions() {
-        const payload = readKeyboardSuggestSettings();
-        const cacheKey = JSON.stringify(payload);
-        if (keyboardSuggestCache.has(cacheKey)) {
-          renderSuggestions(keyboardSuggestCache.get(cacheKey), null);
-          return;
-        }
-
-        suggestEl.disabled = true;
-        try {
-          const resp = await fetch("/api/keyboard/suggest", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-          });
-          const data = await resp.json();
-          if (!resp.ok) {
-            throw new Error(data.detail || "Suggestion request failed");
-          }
-          keyboardSuggestCache.set(cacheKey, data);
-          if (keyboardSuggestCache.size > 50) {
-            const oldestKey = keyboardSuggestCache.keys().next().value;
-            keyboardSuggestCache.delete(oldestKey);
-          }
-          renderSuggestions(data, null);
-        } catch (error) {
-          renderSuggestions({ suggestions: [], used_context: 0 }, error.message);
-        } finally {
-          suggestEl.disabled = false;
-        }
-      }
-
-      async function generate() {
-        const payload = readGenerateSettings();
-        goEl.disabled = true;
-        try {
-          const resp = await fetch("/api/generate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-          });
-          const data = await resp.json();
-          if (!resp.ok) {
-            throw new Error(data.detail || "Request failed");
-          }
-          keyboardSuggestCache.clear();
-          await fetchKeyboardSuggestions();
-        } catch (error) {
-          renderSuggestions({ suggestions: [], used_context: 0 }, error.message);
-        } finally {
-          goEl.disabled = false;
-        }
-      }
-
-      goEl.addEventListener("click", generate);
-      suggestEl.addEventListener("click", fetchKeyboardSuggestions);
-      seedEl.addEventListener("input", () => {
-        keyboardSuggestCache.clear();
-        window.clearTimeout(window.__suggestTimer);
-        window.__suggestTimer = window.setTimeout(fetchKeyboardSuggestions, 250);
-      });
-
-      renderSuggestions({ suggestions: [], used_context: 0 }, null);
-      fetchKeyboardSuggestions();
-    </script>
+    <script type="module" src="/static/seed-demo.js"></script>
   </body>
 </html>

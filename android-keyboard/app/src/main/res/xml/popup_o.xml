@@ -11,10 +11,10 @@
     </Row>
     <Row>
         <Key android:codes="303" android:keyLabel="ɔ" />
-        <Key android:codes="2021" android:keyOutputText="ɔ̀" android:keyLabel="ɔ̀" />
-        <Key android:codes="2022" android:keyOutputText="ɔ́" android:keyLabel="ɔ́" />
-        <Key android:codes="2023" android:keyOutputText="ɔ̄" android:keyLabel="ɔ̄" />
-        <Key android:codes="2024" android:keyOutputText="ɔ̌" android:keyLabel="ɔ̌" />
-        <Key android:codes="2025" android:keyOutputText="ɔ̂" android:keyLabel="ɔ̂" />
+        <Key android:codes="2021" android:keyLabel="ɔ̀" />
+        <Key android:codes="2022" android:keyLabel="ɔ́" />
+        <Key android:codes="2023" android:keyLabel="ɔ̄" />
+        <Key android:codes="2024" android:keyLabel="ɔ̌" />
+        <Key android:codes="2025" android:keyLabel="ɔ̂" />
     </Row>
 </Keyboard>

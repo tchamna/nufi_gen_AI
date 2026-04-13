@@ -9,10 +9,10 @@
         <Key android:codes="462" android:keyLabel="ǎ" />
         <Key android:codes="226" android:keyLabel="â" />
         <Key android:codes="609" android:keyLabel="ɑ" />
-        <Key android:codes="2001" android:keyOutputText="ɑ̀" android:keyLabel="ɑ̀" />
-        <Key android:codes="2002" android:keyOutputText="ɑ́" android:keyLabel="ɑ́" />
-        <Key android:codes="2003" android:keyOutputText="ɑ̄" android:keyLabel="ɑ̄" />
-        <Key android:codes="2004" android:keyOutputText="ɑ̌" android:keyLabel="ɑ̌" />
-        <Key android:codes="2005" android:keyOutputText="ɑ̂" android:keyLabel="ɑ̂" />
+        <Key android:codes="2001" android:keyLabel="ɑ̀" />
+        <Key android:codes="2002" android:keyLabel="ɑ́" />
+        <Key android:codes="2003" android:keyLabel="ɑ̄" />
+        <Key android:codes="2004" android:keyLabel="ɑ̌" />
+        <Key android:codes="2005" android:keyLabel="ɑ̂" />
     </Row>
 </Keyboard>

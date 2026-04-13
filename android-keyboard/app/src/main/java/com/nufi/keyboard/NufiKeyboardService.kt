@@ -217,29 +217,7 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
     override fun onText(text: CharSequence?) {
         val inputConnection = currentInputConnection ?: return
         if (text == null) return
-
-        var output = text.toString()
-        if (shiftEnabled) {
-            output = output.map { ch ->
-                when (ch) {
-                    'ɑ' -> 'Ɑ'
-                    'ɛ' -> 'Ɛ'
-                    'ə' -> 'Ə'
-                    'ɨ' -> 'Ɨ'
-                    'ɔ' -> 'Ɔ'
-                    'ʉ' -> 'Ʉ'
-                    else -> ch.uppercaseChar()
-                }
-            }.joinToString("")
-        }
-
-        inputConnection.commitText(output, 1)
-
-        if (shiftEnabled) {
-            shiftEnabled = false
-            keyboardView.isShifted = false
-            keyboardView.invalidateAllKeys()
-        }
+        inputConnection.commitText(text, 1)
         scheduleClafricaApply()
     }
     override fun swipeLeft() = Unit

@@ -23,6 +23,14 @@ API:
 Files added:
 - `nufi_model.py`: model loading/building and generation
 - `app.py`: FastAPI server
-- `static/index.html`: simple frontend
+- `static/index.html`: simple frontend (optional **Clafrica** checkbox maps Latin shortcuts to Nufi in the seed box; uses `static/clafricaMapping.js`)
+
+The demo loads `static/seed-demo.js`, which imports `./clafricaMapping.js`. Rebuild the bundle after editing `clafricaMapping.ts`:
+
+```bash
+npx esbuild clafricaMapping.ts --bundle --format=esm --outfile=static/clafricaMapping.js
+```
+
+Restart the API after changing `app.py` so `/static/*` is served (required for Clafrica in the browser).
 
 If you want me to run the server here, tell me and I'll start Uvicorn in the terminal.
