@@ -83,6 +83,19 @@ def _word_nufi_display_priority(word: str) -> int:
     return n
 
 
+def _is_punctuation_only_token(word: str) -> bool:
+    """True if the token has no Unicode letters (quotes, ellipsis, etc. as whole 'words')."""
+    if not word:
+        return True
+    for ch in word:
+        cat = unicodedata.category(ch)
+        if cat[0] == "L":
+            return False
+        if cat == "Nl":
+            return False
+    return True
+
+
 def _tokens_assume_low_tone_bare_vowels(tokens: list[str]) -> tuple[list[str], bool]:
     out: list[str] = []
     changed = False
@@ -740,10 +753,14 @@ def suggest_next_words(model, text, n=DEFAULT_ORDER, limit=5):
         reverse=True,
     )
 
+    filtered = [item for item in ranked if not _is_punctuation_only_token(item["word"])]
+    lim = max(1, int(limit))
+    out = filtered[:lim]
+
     return {
         "normalized_text": normalized_text,
         "used_context": used_context or 0,
-        "suggestions": ranked[: max(1, int(limit))],
+        "suggestions": out,
     }
 
 

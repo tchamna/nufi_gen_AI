@@ -187,6 +187,25 @@ def test_suggest_next_words_prefers_nufi_orthography_on_probability_ties():
     assert words[0] == "\u014d"  # ō
 
 
+def test_is_punctuation_only_token():
+    assert nm._is_punctuation_only_token("...") is True
+    assert nm._is_punctuation_only_token("\u00bb") is True  # »
+    assert nm._is_punctuation_only_token('"') is True
+    assert nm._is_punctuation_only_token("m\u00e1") is False
+
+
+def test_suggest_next_words_skips_punctuation_only_tokens():
+    model = {
+        ("seed",): {"word": 0.3, "...": 0.25, "\u00bb": 0.25, "ok": 0.2},
+    }
+    payload = nm.suggest_next_words(model, "seed", n=2, limit=8)
+    words = [s["word"] for s in payload["suggestions"]]
+    assert "word" in words
+    assert "ok" in words
+    assert "..." not in words
+    assert "\u00bb" not in words
+
+
 def test_suggest_next_words_returns_ranked_words():
     tokens = [
         ["hello", "world"],
