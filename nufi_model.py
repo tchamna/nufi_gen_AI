@@ -442,6 +442,61 @@ def _find_choices(model, tokens_out, max_ctx):
     return choices
 
 
+def _weights_for_backoff_levels(n_levels: int, sparse_longest: bool) -> list[float]:
+    """Weights for blending longest→shortest n-gram contexts (sum to 1).
+
+    When the longest context has few distinct continuations, up-weight shorter
+    contexts so unigram signal (e.g. after ``zǎ`` generally) is not drowned out.
+    """
+    if n_levels <= 0:
+        return []
+    if n_levels == 1:
+        return [1.0]
+    if n_levels == 2:
+        return [0.55, 0.45] if sparse_longest else [0.62, 0.38]
+    if n_levels == 3:
+        if sparse_longest:
+            return [0.12, 0.28, 0.60]
+        return [0.45, 0.35, 0.20]
+    raw = [0.5**i for i in range(n_levels)]
+    s = sum(raw)
+    return [w / s for w in raw]
+
+
+def _interpolate_ngram_choices(model, tokens_out, max_ctx):
+    """Blend next-word distributions from longest available context down to 1-gram.
+
+    Using only the longest match hides plausible continuations when that context is
+    sparse (few attested next words) while shorter contexts still carry signal
+    (e.g. after ``zǎ`` generally, vs. a rare full ``kɑ' zhī zǎ`` trigram).
+    """
+    levels = []
+    for k in range(min(len(tokens_out), max_ctx), 0, -1):
+        key = tuple(tokens_out[-k:])
+        ch = model.get(key)
+        if not ch:
+            continue
+        if not any(w is not None for w in ch):
+            continue
+        levels.append((k, ch))
+    if not levels:
+        return None, None
+
+    longest_ch = levels[0][1]
+    n_distinct = sum(1 for w in longest_ch if w is not None)
+    sparse_longest = n_distinct <= 4
+    weights = _weights_for_backoff_levels(len(levels), sparse_longest)
+    merged = {}
+    for (k, ch), alpha in zip(levels, weights):
+        for word, p in ch.items():
+            if word is None:
+                continue
+            merged[word] = merged.get(word, 0) + alpha * float(p)
+
+    primary_k = levels[0][0]
+    return merged, primary_k
+
+
 def _sample_word(choices, temperature):
     if temperature <= 0:
         return max(choices.items(), key=lambda item: item[1])[0]
@@ -613,14 +668,14 @@ def suggest_next_words(model, text, n=DEFAULT_ORDER, limit=5):
     normalized_text = clean_text(text)
     tokens = normalized_text.split()
     context_length = _requested_context_length(model, n)
-    choices, used_context = _find_choices_with_length(model, tokens, context_length)
+    choices, used_context = _interpolate_ngram_choices(model, tokens, context_length)
 
     # Older pickles may still index contexts under tone-marked tokens (e.g. "pèn") while
     # clean_text maps "pèn" → "pen". Retry lookup without dict_ton_bas when no match.
     if not choices:
         legacy_tokens = clean_text(text, apply_ton_bas=False).split()
         if legacy_tokens != tokens:
-            choices, used_context = _find_choices_with_length(
+            choices, used_context = _interpolate_ngram_choices(
                 model, legacy_tokens, context_length
             )
 
@@ -628,7 +683,7 @@ def suggest_next_words(model, text, n=DEFAULT_ORDER, limit=5):
     if not choices:
         assumed_tokens, changed = _tokens_assume_low_tone_bare_vowels(tokens)
         if changed:
-            choices, used_context = _find_choices_with_length(
+            choices, used_context = _interpolate_ngram_choices(
                 model, assumed_tokens, context_length
             )
 
