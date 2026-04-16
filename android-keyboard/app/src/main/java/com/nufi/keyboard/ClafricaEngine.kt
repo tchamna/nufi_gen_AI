@@ -6,7 +6,7 @@ import java.util.Locale
 import java.util.regex.Pattern
 
 /**
- * Mirrors [clafricaMapping.ts]: applies Clafrica shortcuts in the IME using [assets/clafrica.json].
+ * Mirrors [clafricaMapping.ts] and overlays SMS shortcuts from [assets/nufi_sms.json].
  */
 class ClafricaEngine(context: Context) {
 
@@ -15,19 +15,24 @@ class ClafricaEngine(context: Context) {
     private val ambiguousKeys: Set<String>
 
     init {
-        val jsonText = context.assets.open("clafrica.json").bufferedReader(Charsets.UTF_8).use { it.readText() }
-        val json = JSONObject(jsonText)
         val m = LinkedHashMap<String, String>()
-        val it = json.keys()
-        while (it.hasNext()) {
-            val k = it.next()
-            m[k] = json.getString(k)
-        }
+        loadAssetMap(context, "clafrica.json", m)
+        loadAssetMap(context, "nufi_sms.json", m)
         map = m
         allKeysSorted = map.keys.sortedWith(compareBy<String> { -it.length }.thenBy { it })
         ambiguousKeys = allKeysSorted.filter { key ->
             allKeysSorted.any { other -> other.length > key.length && other.startsWith(key) }
         }.toSet()
+    }
+
+    private fun loadAssetMap(context: Context, assetName: String, destination: MutableMap<String, String>) {
+        val jsonText = context.assets.open(assetName).bufferedReader(Charsets.UTF_8).use { it.readText() }
+        val json = JSONObject(jsonText)
+        val keys = json.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            destination[key] = json.getString(key)
+        }
     }
 
     fun applyClafricaMapping(input: String, preserveAmbiguousTrailingToken: Boolean): String {

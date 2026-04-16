@@ -37,7 +37,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\run_app.ps1
 
 ## Updating the Clafrica map
 
-The Android keyboard shortcut map is generated from `nufi_sms_and_calendar.xlsx`, sheet `Nufi_SMS`.
+The Android keyboard uses two shortcut assets:
+
+- `app/src/main/assets/clafrica.json` for the base **Clafrica** shortcuts from `../clafricaMapping.ts`
+- `app/src/main/assets/nufi_sms.json` for the extra SMS shortcuts from `nufi_sms_and_calendar.xlsx`, sheet `Nufi_SMS`
 
 To regenerate the JSON asset:
 

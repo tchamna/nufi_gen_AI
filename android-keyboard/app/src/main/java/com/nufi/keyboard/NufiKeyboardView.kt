@@ -64,7 +64,7 @@ class NufiKeyboardView(context: Context, attrs: AttributeSet) : KeyboardView(con
             R.xml.popup_b -> "ɓ"
             R.xml.popup_c -> "ç"
             R.xml.popup_d -> "ɗ"
-            R.xml.popup_f -> "|"
+            R.xml.popup_f -> "?"
             R.xml.popup_g -> "'"
             R.xml.popup_h -> "{"
             R.xml.popup_j -> "}"
