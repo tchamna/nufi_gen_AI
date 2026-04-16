@@ -8,11 +8,11 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.nufi.keyboard"
-        minSdk = 26
+        applicationId = "com.resulam.clafricaplus"
+        minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 3000
+        versionName = "3.0"
     }
 
     buildTypes {

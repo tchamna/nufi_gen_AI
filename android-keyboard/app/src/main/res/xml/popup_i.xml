@@ -3,11 +3,18 @@
     android:keyHeight="56dp"
     android:keyWidth="16%p">
     <Row>
-        <Key android:codes="616" android:keyLabel="ɨ" />
-        <Key android:codes="2016" android:keyLabel="ɨ̀" />
-        <Key android:codes="2017" android:keyLabel="ɨ́" />
-        <Key android:codes="2018" android:keyLabel="ɨ̄" />
-        <Key android:codes="2019" android:keyLabel="ɨ̌" />
-        <Key android:codes="2020" android:keyLabel="ɨ̂" />
+        <Key android:codes="616" android:keyLabel="&#616;" />
+        <Key android:codes="2016" android:keyLabel="&#616;&#768;" />
+        <Key android:codes="2017" android:keyLabel="&#616;&#769;" />
+        <Key android:codes="2018" android:keyLabel="&#616;&#772;" />
+        <Key android:codes="2019" android:keyLabel="&#616;&#780;" />
+        <Key android:codes="2020" android:keyLabel="&#616;&#770;" />
+    </Row>
+    <Row>
+        <Key android:codes="236" android:keyLabel="&#236;" />
+        <Key android:codes="237" android:keyLabel="&#237;" />
+        <Key android:codes="299" android:keyLabel="&#299;" />
+        <Key android:codes="464" android:keyLabel="&#464;" />
+        <Key android:codes="238" android:keyLabel="&#238;" />
     </Row>
 </Keyboard>

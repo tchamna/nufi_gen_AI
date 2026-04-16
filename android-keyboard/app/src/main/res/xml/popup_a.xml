@@ -14,5 +14,6 @@
         <Key android:codes="2003" android:keyLabel="ɑ̄" />
         <Key android:codes="2004" android:keyLabel="ɑ̌" />
         <Key android:codes="2005" android:keyLabel="ɑ̂" />
+        <Key android:codes="0" android:keyLabel=" " android:keyWidth="0dp" />
     </Row>
 </Keyboard>

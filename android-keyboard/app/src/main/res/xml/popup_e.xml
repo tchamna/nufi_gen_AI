@@ -3,24 +3,26 @@
     android:keyHeight="56dp"
     android:keyWidth="12%p">
     <Row>
-        <Key android:codes="232" android:keyLabel="è" />
-        <Key android:codes="233" android:keyLabel="é" />
-        <Key android:codes="275" android:keyLabel="ē" />
-        <Key android:codes="283" android:keyLabel="ě" />
-        <Key android:codes="234" android:keyLabel="ê" />
-        <Key android:codes="603" android:keyLabel="ɛ" />
-        <Key android:codes="2006" android:keyLabel="ɛ̀" />
-        <Key android:codes="2007" android:keyLabel="ɛ́" />
+        <Key android:codes="232" android:keyLabel="&#232;" />
+        <Key android:codes="233" android:keyLabel="&#233;" />
+        <Key android:codes="275" android:keyLabel="&#275;" />
+        <Key android:codes="283" android:keyLabel="&#283;" />
+        <Key android:codes="234" android:keyLabel="&#234;" />
     </Row>
     <Row>
-        <Key android:codes="2008" android:keyLabel="ɛ̄" />
-        <Key android:codes="2009" android:keyLabel="ɛ̌" />
-        <Key android:codes="2010" android:keyLabel="ɛ̂" />
-        <Key android:codes="601" android:keyLabel="ə" />
-        <Key android:codes="2011" android:keyLabel="ə̀" />
-        <Key android:codes="2012" android:keyLabel="ə́" />
-        <Key android:codes="2013" android:keyLabel="ə̄" />
-        <Key android:codes="2014" android:keyLabel="ə̌" />
-        <Key android:codes="2015" android:keyLabel="ə̂" />
+        <Key android:codes="603" android:keyLabel="&#603;" />
+        <Key android:codes="2006" android:keyLabel="&#603;&#768;" />
+        <Key android:codes="2007" android:keyLabel="&#603;&#769;" />
+        <Key android:codes="2008" android:keyLabel="&#603;&#772;" />
+        <Key android:codes="2009" android:keyLabel="&#603;&#780;" />
+        <Key android:codes="2010" android:keyLabel="&#603;&#770;" />
+    </Row>
+    <Row>
+        <Key android:codes="601" android:keyLabel="&#601;" />
+        <Key android:codes="2011" android:keyLabel="&#601;&#768;" />
+        <Key android:codes="2012" android:keyLabel="&#601;&#769;" />
+        <Key android:codes="2013" android:keyLabel="&#601;&#772;" />
+        <Key android:codes="2014" android:keyLabel="&#601;&#780;" />
+        <Key android:codes="2015" android:keyLabel="&#601;&#770;" />
     </Row>
 </Keyboard>

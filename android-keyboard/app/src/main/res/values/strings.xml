@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Clafrica Resulam+</string>
-    <string name="ime_name">Clafrica Resulam+</string>
-    <string name="ime_subtype_label">Clafrica Keyboard</string>
-    <string name="setup_title">Clafrica Keyboard Setup</string>
+    <string name="app_name">Clafrica Resulam Plus</string>
+    <string name="ime_name">Clafrica Resulam Plus</string>
+    <string name="ime_subtype_label">Clafrica Resulam Plus</string>
+    <string name="setup_title">Clafrica Resulam Plus Setup</string>
     <string name="setup_body">Point the keyboard to your running Nufi API, enable the keyboard in Android settings, then choose it as the active input method.</string>
     <string name="base_url_hint">https://your-app.azurewebsites.net (no trailing slash)</string>
     <string name="save_settings">Save API URL</string>
-    <string name="open_keyboard_settings">Activate Clafrica</string>
-    <string name="choose_keyboard">Choose Clafrica</string>
+    <string name="open_keyboard_settings">Activate Clafrica Resulam Plus</string>
+    <string name="choose_keyboard">Choose Clafrica Resulam Plus</string>
     <string name="base_url_required">Enter an API URL first.</string>
     <string name="settings_saved">Keyboard settings saved.</string>
     <string name="fetching_suggestions">Fetching suggestions...</string>

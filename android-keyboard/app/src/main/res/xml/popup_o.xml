@@ -3,18 +3,19 @@
     android:keyHeight="56dp"
     android:keyWidth="10%p">
     <Row>
-        <Key android:codes="242" android:keyLabel="ò" />
-        <Key android:codes="243" android:keyLabel="ó" />
-        <Key android:codes="333" android:keyLabel="ō" />
-        <Key android:codes="466" android:keyLabel="ǒ" />
-        <Key android:codes="244" android:keyLabel="ô" />
+        <Key android:codes="242" android:keyLabel="&#242;" />
+        <Key android:codes="243" android:keyLabel="&#243;" />
+        <Key android:codes="333" android:keyLabel="&#333;" />
+        <Key android:codes="466" android:keyLabel="&#466;" />
+        <Key android:codes="244" android:keyLabel="&#244;" />
+        <Key android:codes="0" android:keyLabel=" " android:keyWidth="0dp" />
     </Row>
     <Row>
-        <Key android:codes="303" android:keyLabel="ɔ" />
-        <Key android:codes="2021" android:keyLabel="ɔ̀" />
-        <Key android:codes="2022" android:keyLabel="ɔ́" />
-        <Key android:codes="2023" android:keyLabel="ɔ̄" />
-        <Key android:codes="2024" android:keyLabel="ɔ̌" />
-        <Key android:codes="2025" android:keyLabel="ɔ̂" />
+        <Key android:codes="303" android:keyLabel="&#596;" />
+        <Key android:codes="2021" android:keyLabel="&#596;&#768;" />
+        <Key android:codes="2022" android:keyLabel="&#596;&#769;" />
+        <Key android:codes="2023" android:keyLabel="&#596;&#772;" />
+        <Key android:codes="2024" android:keyLabel="&#596;&#780;" />
+        <Key android:codes="2025" android:keyLabel="&#596;&#770;" />
     </Row>
 </Keyboard>

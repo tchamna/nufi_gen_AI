@@ -3,7 +3,6 @@
     android:keyHeight="56dp"
     android:keyWidth="20%p">
     <Row>
-        <Key android:codes="595" android:keyLabel="&#595;" />
-        <Key android:codes="0" android:keyLabel=" " android:keyWidth="0dp" />
+        <Key android:codes="61" android:keyLabel="=" />
     </Row>
 </Keyboard>
