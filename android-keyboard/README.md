@@ -37,10 +37,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\run_app.ps1
 
 ## Updating the Clafrica map
 
-When `clafricaMapping.ts` changes, regenerate the JSON asset from the repo root:
+The Android keyboard shortcut map is generated from `nufi_sms_and_calendar.xlsx`, sheet `Nufi_SMS`.
+
+To regenerate the JSON asset:
 
 ```powershell
-npx tsx -e "import { Clafrica } from './clafricaMapping.ts'; import * as fs from 'fs'; fs.writeFileSync('android-keyboard/app/src/main/assets/clafrica.json', JSON.stringify(Clafrica), 'utf8');"
+python .\tools\generate_clafrica_from_sms.py
 ```
 
 Then rebuild the APK.
