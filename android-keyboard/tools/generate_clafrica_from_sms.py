@@ -23,6 +23,9 @@ CALENDAR_OUTPUT_PATH = ASSETS_DIR / "nufi_calendar.json"
 SMS_SHEET_NAME = "Nufi_SMS"
 CALENDAR_SHEET_NAME = "Nufi_Calendar"
 NUMERIC_APOSTROPHE_SHORTCUT = re.compile(r"^(\d+)'$")
+SMS_SHORTCUT_FIXES = {
+    "ks": "wks",
+}
 CALENDAR_TEXT_FIXES = (
     ("Nk\u0251\u0301\u0251\u0301nt\u0113\u0113", "Nk\u0251\u0301\u0251\u0301t\u0113\u0113"),
 )
@@ -98,8 +101,8 @@ def apply_calendar_text_fixes(text: str) -> str:
 def normalize_sms_shortcut(shortcut: str) -> str:
     match = NUMERIC_APOSTROPHE_SHORTCUT.fullmatch(shortcut)
     if match:
-        return f"{match.group(1)}*"
-    return shortcut
+        shortcut = f"{match.group(1)}*"
+    return SMS_SHORTCUT_FIXES.get(shortcut, shortcut)
 
 
 def load_sms_mapping(

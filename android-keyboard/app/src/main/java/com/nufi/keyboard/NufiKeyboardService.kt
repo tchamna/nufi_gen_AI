@@ -77,12 +77,7 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
             val ic = currentInputConnection
             if (ic != null && lastPressedCode == Keyboard.KEYCODE_DELETE) {
                 ic.beginBatchEdit()
-                val before = ic.getTextBeforeCursor(100, 0)
-                if (before != null && before.isNotEmpty()) {
-                    val lastWordMatch = Regex("(\\w+|\\s+|[^\\w\\s]+)$").find(before)
-                    val lengthToDelete = lastWordMatch?.value?.length ?: 1
-                    ic.deleteSurroundingText(lengthToDelete, 0)
-                }
+                deleteSelectionOrPreviousWordOrCharacter(ic)
                 ic.endBatchEdit()
                 mainHandler.postDelayed(this, 300)
             }
@@ -186,7 +181,7 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
             }
             Keyboard.KEYCODE_DELETE -> {
                 if (!isLongPress) {
-                    inputConnection.deleteSurroundingText(1, 0)
+                    deleteSelectionOrPreviousWordOrCharacter(inputConnection, preferWordDeletion = false)
                     shouldClafrica = true
                 }
             }
@@ -269,6 +264,39 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
         } finally {
             ic.endBatchEdit()
         }
+    }
+
+    private fun deleteSelectionOrPreviousWordOrCharacter(
+        ic: InputConnection,
+        preferWordDeletion: Boolean = true,
+    ): Boolean {
+        if (deleteSelectedText(ic)) {
+            return true
+        }
+
+        if (preferWordDeletion) {
+            val before = ic.getTextBeforeCursor(100, 0)
+            if (before != null && before.isNotEmpty()) {
+                val lastWordMatch = Regex("(\\w+|\\s+|[^\\w\\s]+)$").find(before)
+                val lengthToDelete = lastWordMatch?.value?.length ?: 1
+                if (ic.deleteSurroundingText(lengthToDelete, 0)) {
+                    return true
+                }
+            }
+        }
+
+        return ic.deleteSurroundingText(1, 0) || ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL)) || ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DEL))
+    }
+
+    private fun deleteSelectedText(ic: InputConnection): Boolean {
+        val selectedText = ic.getSelectedText(0)
+        if (selectedText.isNullOrEmpty()) return false
+        if (ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))) {
+            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DEL))
+            return true
+        }
+        if (ic.commitText("", 1)) return true
+        return ic.deleteSurroundingText(1, 0) || ic.deleteSurroundingText(0, 1)
     }
 
     override fun onPress(primaryCode: Int) {
