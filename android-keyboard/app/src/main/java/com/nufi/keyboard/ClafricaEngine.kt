@@ -2,6 +2,7 @@ package com.nufi.keyboard
 
 import android.content.Context
 import org.json.JSONObject
+import java.time.LocalDate
 import java.util.Locale
 import java.util.regex.Pattern
 
@@ -18,6 +19,7 @@ class ClafricaEngine(context: Context) {
     private val phrasePatternsSorted: List<Pair<Regex, String>>
     private val ambiguousKeys: Set<String>
     private val calendarPattern = Regex("(?<![\\p{L}\\p{N}])(\\d{1,2})([ -])(\\d{1,2})\\2(\\d{4})(?![\\p{L}\\p{N}])")
+    private val todayKeywords = setOf("today*", "aujourd'hui*", "aujourdhui*", "date*", "l'nz")
 
     init {
         val tokenEntries = LinkedHashMap<String, String>()
@@ -146,6 +148,7 @@ class ClafricaEngine(context: Context) {
     }
 
     private fun resolveClafricaKey(token: String): String? {
+        if (resolveDynamicDateValue(token) != null) return token
         if (tokenMap.containsKey(token)) return token
         if (isAsciiOnlyShortcut(token)) {
             val lower = token.lowercase(Locale.ROOT)
@@ -154,10 +157,31 @@ class ClafricaEngine(context: Context) {
         return null
     }
 
+    private fun resolveDynamicDateValue(token: String): String? {
+        if (calendarMap.isEmpty()) return null
+        val normalized = token.lowercase(Locale.ROOT)
+        if (normalized !in todayKeywords) return null
+
+        val today = LocalDate.now()
+        val canonical = String.format(
+            Locale.ROOT,
+            "%02d-%02d-%04d",
+            today.dayOfMonth,
+            today.monthValue,
+            today.year,
+        )
+        return calendarMap[canonical]
+    }
+
+    private fun mappedValueForCanonicalKey(key: String): String? {
+        return tokenMap[key] ?: resolveDynamicDateValue(key)
+    }
+
     private fun applyClafricaMappingToToken(token: String): String {
         if (token.isEmpty()) return token
 
-        resolveClafricaKey(token)?.let { return tokenMap[it]!! }
+        resolveDynamicDateValue(token)?.let { return it }
+        resolveClafricaKey(token)?.let { return mappedValueForCanonicalKey(it)!! }
 
         val twoNum = Regex("^([a-zA-Z]+\\*?)([1-9])([1-9])$").matchEntire(token)
         if (twoNum != null) {
@@ -165,7 +189,7 @@ class ClafricaEngine(context: Context) {
             val num1 = twoNum.groupValues[2]
             val num2 = twoNum.groupValues[3]
             val combinedKey = "$letters$num1$num2"
-            resolveClafricaKey(combinedKey)?.let { return tokenMap[it]!! }
+            resolveClafricaKey(combinedKey)?.let { return mappedValueForCanonicalKey(it)!! }
         }
 
         val oneNum = Regex("^([a-zA-Z]+\\*?)([1-9])$").matchEntire(token)
@@ -173,7 +197,7 @@ class ClafricaEngine(context: Context) {
             val letters = oneNum.groupValues[1]
             val num = oneNum.groupValues[2]
             val combinedKey = "$letters$num"
-            resolveClafricaKey(combinedKey)?.let { return tokenMap[it]!! }
+            resolveClafricaKey(combinedKey)?.let { return mappedValueForCanonicalKey(it)!! }
         }
 
         for (key in allKeysSorted) {
@@ -261,7 +285,7 @@ class ClafricaEngine(context: Context) {
         val exactCanonical = exactTrailingKey?.let { resolveClafricaKey(it) }
         if (exactTrailingKey != null && exactCanonical != null && !ambiguousKeys.contains(exactCanonical)) {
             val prefix = token.substring(0, token.length - exactTrailingKey.length)
-            return applyClafricaMappingToToken(prefix) + tokenMap[exactCanonical]!!
+            return applyClafricaMappingToToken(prefix) + mappedValueForCanonicalKey(exactCanonical)!!
         }
 
         val ambiguousSuffix = getAmbiguousTrailingSuffix(token)
@@ -289,7 +313,7 @@ class ClafricaEngine(context: Context) {
             val exactCanonical = exactTrailingKey?.let { resolveClafricaKey(it) }
             if (exactTrailingKey != null && exactCanonical != null) {
                 val prefix = current.substring(0, current.length - exactTrailingKey.length)
-                val next = applyClafricaMappingToToken(prefix) + tokenMap[exactCanonical]!!
+                val next = applyClafricaMappingToToken(prefix) + mappedValueForCanonicalKey(exactCanonical)!!
                 if (next != current) {
                     current = next
                     changed = true

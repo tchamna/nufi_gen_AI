@@ -23,6 +23,9 @@ CALENDAR_OUTPUT_PATH = ASSETS_DIR / "nufi_calendar.json"
 SMS_SHEET_NAME = "Nufi_SMS"
 CALENDAR_SHEET_NAME = "Nufi_Calendar"
 NUMERIC_APOSTROPHE_SHORTCUT = re.compile(r"^(\d+)'$")
+CALENDAR_TEXT_FIXES = (
+    ("Nk\u0251\u0301\u0251\u0301nt\u0113\u0113", "Nk\u0251\u0301\u0251\u0301t\u0113\u0113"),
+)
 
 
 def load_base_mapping() -> dict[str, str]:
@@ -81,6 +84,13 @@ def load_dictionary_replacements() -> tuple[tuple[str, str], ...]:
 def normalize_sms_text(text: str, replacements: tuple[tuple[str, str], ...]) -> str:
     normalized = text
     for source, target in replacements:
+        normalized = normalized.replace(source, target)
+    return normalized
+
+
+def apply_calendar_text_fixes(text: str) -> str:
+    normalized = text
+    for source, target in CALENDAR_TEXT_FIXES:
         normalized = normalized.replace(source, target)
     return normalized
 
@@ -149,9 +159,11 @@ def load_calendar_mapping(
     for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
         date_text = "" if row[date_index] is None else str(row[date_index]).strip()
         day_eng = "" if row[day_eng_index] is None else str(row[day_eng_index]).strip()
-        day_nufi = "" if row[day_nufi_index] is None else normalize_sms_text(
-            str(row[day_nufi_index]).strip(),
-            active_replacements,
+        day_nufi = "" if row[day_nufi_index] is None else apply_calendar_text_fixes(
+            normalize_sms_text(
+                str(row[day_nufi_index]).strip(),
+                active_replacements,
+            )
         )
         if not date_text or not day_eng or not day_nufi:
             continue

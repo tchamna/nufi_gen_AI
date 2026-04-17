@@ -43,6 +43,9 @@ The Android keyboard uses two shortcut assets:
 - `app/src/main/assets/nufi_sms.json` for the extra SMS shortcuts from `nufi_sms_and_calendar.xlsx`, sheet `Nufi_SMS`
 - `app/src/main/assets/nufi_calendar.json` for the calendar date expansions from `nufi_sms_and_calendar.xlsx`, sheet `Nufi_Calendar`
 
+The keyboard also resolves these runtime aliases to today's date in the same calendar format:
+`today*`, `aujourd'hui*`, `aujourdhui*`, `date*`, `l'nz`
+
 To regenerate the JSON asset:
 
 ```powershell
