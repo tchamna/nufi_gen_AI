@@ -11,7 +11,7 @@
         <Key android:codes="0" android:keyLabel=" " android:keyWidth="0dp" />
     </Row>
     <Row>
-        <Key android:codes="303" android:keyLabel="&#596;" />
+        <Key android:codes="596" android:keyLabel="&#596;" />
         <Key android:codes="2021" android:keyLabel="&#596;&#768;" />
         <Key android:codes="2022" android:keyLabel="&#596;&#769;" />
         <Key android:codes="2023" android:keyLabel="&#596;&#772;" />
