@@ -1,41 +1,37 @@
-# Mise a Jour du Clavier Clafrica Resulam
+Mise à jour du Clavier Clafrica Resulam
 
-Une nouvelle mise a jour est maintenant disponible pour le **Clavier Clafrica Resulam**.
+Une nouvelle version du Clavier Clafrica Resulam est désormais disponible.
 
-## Nouveautes
+Nouveautés
 
-- Amelioration du comportement des popups sur les touches et les symboles
-- Meilleur acces aux caracteres speciaux par appui long
-- Restauration des **raccourcis Clafrica** en plus des **raccourcis Nufi SMS**
-- Ajout des **transformations de dates du calendrier** a partir de la feuille calendrier Nufi
-- Ajout des raccourcis dynamiques de date :
-  - `date*`
-  - `today*`
-  - `now*`
-  - `ze'e*`
-  - `aujourd'hui*`
-  - `aujourdhui*`
-  - `yesterday*`
-  - `*waha`
-  - `tomorrow*`
-  - `waha*`
+- Raccourcis Nufi SMS intégrés
 
-   - Ajout de la prédiction du prochain mot : trois suggestions en ligne pendant la frappe
+  Accédez plus rapidement aux expressions courantes en Nufi grâce aux nouveaux raccourcis SMS.
 
-## Exemples
+- Prédiction intelligente du prochain mot
 
-- `af1` -> `ɑ̀`
-- `date*` -> la date d'aujourd'hui au format Nufi
-- `yesterday*` / `*waha` -> la date d'hier
-- `tomorrow*` / `waha*` -> la date de demain
+  Le clavier propose désormais plusieurs suggestions en temps réel pendant la saisie.
 
-## Ameliorations Incluses
+  Exemple : en saisissant mbeu33 (mbə̄ə̄), des suggestions comme lɑ́, mbɑ, mēmmɑ̄, etc. apparaissent.
 
-- Corrections de la disposition du clavier
-- Corrections des symboles
-- Popups plus fiables
-- Experience de frappe plus fluide
+  Vous pouvez appuyer sur une suggestion pour continuer votre phrase, ou poursuivre la saisie si nécessaire.
 
-## Action
+- Raccourcis dynamiques pour les dates
 
-Veuillez installer le dernier APK et tester les nouveaux raccourcis ainsi que les nouvelles fonctions de date.
+  Entrez des commandes comme :
+
+  `date*`, `today*`, `now*`, `ze'e*`, `aujourd'hui*`, `aujourdhui*`
+
+  → Le clavier génère automatiquement la date au format :
+
+  Zě'é mɑ́ Nkɑ́ɑ́tēē (Thursday), līē' 16, ngu' 2026
+
+  De même :
+
+  `yesterday*`, `*waha` → Wāha kɑ̌' Líé'nkwe' (Wednesday), līē' 15, ngu' 2026
+
+  `tomorrow*`, `waha*` → Wāhá imbɑ̄ Nzêngoo (Friday), līē' 17, ngu' 2026
+
+Action requise
+
+Veuillez installer la dernière version APK et tester les nouveaux raccourcis ainsi que les fonctionnalités liées aux dates.

@@ -170,7 +170,17 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
                 keyboardView.isShifted = shiftEnabled
                 keyboardView.invalidateAllKeys()
             }
-            Keyboard.KEYCODE_DONE -> sendEnterOrEditorAction(inputConnection)
+            Keyboard.KEYCODE_DONE -> {
+                val shiftForChatSend =
+                    keyboardView.isShifted &&
+                        currentInputEditorInfo?.let { isChatStyleMultiLine(it) } == true
+                sendEnterOrEditorAction(inputConnection, forceChatSend = shiftForChatSend)
+                if (shiftForChatSend) {
+                    shiftEnabled = false
+                    keyboardView.isShifted = false
+                    keyboardView.invalidateAllKeys()
+                }
+            }
             Keyboard.KEYCODE_MODE_CHANGE -> setKeyboardLayout(!isSymbols)
             32 -> {
                 inputConnection.commitText(" ", 1)
@@ -261,42 +271,105 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
     override fun swipeDown() = Unit
     override fun swipeUp() = Unit
 
-    private fun sendEnterOrEditorAction(ic: InputConnection) {
+    /**
+     * @param forceChatSend true when Shift+Enter in a chat-style multi-line field: run Send (and related actions).
+     * Plain Enter always inserts a newline in multi-line fields so the IME is not dismissed by Send/Done.
+     */
+    private fun sendEnterOrEditorAction(ic: InputConnection, forceChatSend: Boolean) {
         ic.finishComposingText()
         val info = currentInputEditorInfo ?: return
 
-        val packageName = info.packageName.orEmpty()
         val actionId = info.imeOptions and EditorInfo.IME_MASK_ACTION
         val isMultiLine = (info.inputType and EditorInfo.TYPE_TEXT_FLAG_MULTI_LINE) != 0
+        val isChatComposer = isChatStyleMultiLine(info)
 
-        val actionCandidates = mutableListOf<Int>()
-        if (isLikelyMessagingEditor(packageName)) {
-            actionCandidates += EditorInfo.IME_ACTION_SEND
-        }
-        if (actionId != EditorInfo.IME_ACTION_NONE && actionId != EditorInfo.IME_ACTION_UNSPECIFIED && actionId != EditorInfo.IME_ACTION_DONE) {
-            actionCandidates += actionId
-        }
-        if (EditorInfo.IME_ACTION_SEND !in actionCandidates) {
-            actionCandidates += EditorInfo.IME_ACTION_SEND
-        }
-        if (!isMultiLine && actionId == EditorInfo.IME_ACTION_DONE) {
-            actionCandidates += EditorInfo.IME_ACTION_DONE
-        }
-
-        for (candidate in actionCandidates.distinct()) {
-            if (ic.performEditorAction(candidate)) {
-                return
+        if (forceChatSend && isChatComposer) {
+            val actionCandidates = mutableListOf<Int>()
+            when (actionId) {
+                EditorInfo.IME_ACTION_NONE,
+                EditorInfo.IME_ACTION_UNSPECIFIED -> actionCandidates += EditorInfo.IME_ACTION_SEND
+                else -> {
+                    actionCandidates += actionId
+                    if (EditorInfo.IME_ACTION_SEND !in actionCandidates) {
+                        actionCandidates += EditorInfo.IME_ACTION_SEND
+                    }
+                }
             }
-        }
-
-        if (isMultiLine) {
-            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
-            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
+            for (candidate in actionCandidates.distinct()) {
+                if (ic.performEditorAction(candidate)) return
+            }
+            sendEnterKeyEvents(ic)
             return
         }
 
+        // Search fields: submit query; never insert a newline (e.g. Google / Chrome search).
+        if (isSearchField(info)) {
+            submitSearchEnter(ic, actionId)
+            return
+        }
+
+        if (isMultiLine) {
+            insertNewline(ic)
+            return
+        }
+
+        // Single-line: run the host's action first so Go/Search/Done win over a stray newline.
+        if (actionId != EditorInfo.IME_ACTION_NONE && actionId != EditorInfo.IME_ACTION_UNSPECIFIED) {
+            if (ic.performEditorAction(actionId)) return
+        }
+
+        // Some hosts (e.g. WebView) omit TYPE_TEXT_FLAG_MULTI_LINE on text areas; try newline next.
+        if (ic.commitText("\n", 1)) {
+            return
+        }
+
+        sendEnterKeyEvents(ic)
+    }
+
+    /** Prefer SEARCH, then any other declared action (e.g. GO on some builds). */
+    private fun submitSearchEnter(ic: InputConnection, actionId: Int) {
+        val candidates = mutableListOf(EditorInfo.IME_ACTION_SEARCH)
+        if (actionId != EditorInfo.IME_ACTION_NONE &&
+            actionId != EditorInfo.IME_ACTION_UNSPECIFIED &&
+            actionId != EditorInfo.IME_ACTION_SEARCH
+        ) {
+            candidates += actionId
+        }
+        for (c in candidates.distinct()) {
+            if (ic.performEditorAction(c)) return
+        }
+        sendEnterKeyEvents(ic)
+    }
+
+    /**
+     * Search UI from the host app: [EditorInfo.IME_ACTION_SEARCH] (magnifying-glass key + submit).
+     * Variation bits alone are not used: several overlap (e.g. 0x40) with other text modes.
+     */
+    private fun isSearchField(info: EditorInfo): Boolean {
+        val action = info.imeOptions and EditorInfo.IME_MASK_ACTION
+        return action == EditorInfo.IME_ACTION_SEARCH
+    }
+
+    private fun insertNewline(ic: InputConnection) {
+        ic.commitText("\n", 1)
+    }
+
+    private fun sendEnterKeyEvents(ic: InputConnection) {
         ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
         ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
+    }
+
+    /**
+     * Messaging-style multi-line composers: Shift+Enter runs Send; plain Enter inserts a newline.
+     */
+    private fun isChatStyleMultiLine(info: EditorInfo): Boolean {
+        val isMultiLine = (info.inputType and EditorInfo.TYPE_TEXT_FLAG_MULTI_LINE) != 0
+        if (!isMultiLine) return false
+        val actionId = info.imeOptions and EditorInfo.IME_MASK_ACTION
+        if (actionId == EditorInfo.IME_ACTION_SEND) return true
+        val variation = info.inputType and EditorInfo.TYPE_MASK_VARIATION
+        if (variation == EditorInfo.TYPE_TEXT_VARIATION_SHORT_MESSAGE) return true
+        return isLikelyMessagingEditor(info.packageName.orEmpty())
     }
 
     private fun isLikelyMessagingEditor(packageName: String): Boolean {
@@ -304,7 +377,10 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
             packageName.contains("telegram", ignoreCase = true) ||
             packageName.contains("signal", ignoreCase = true) ||
             packageName.contains("messaging", ignoreCase = true) ||
-            packageName.contains("messenger", ignoreCase = true)
+            packageName.contains("messenger", ignoreCase = true) ||
+            packageName.contains("discord", ignoreCase = true) ||
+            packageName.contains("slack", ignoreCase = true) ||
+            packageName.contains("instagram", ignoreCase = true)
     }
 
     private fun refreshSuggestions() {
@@ -332,6 +408,7 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
         val actionId = info?.imeOptions?.and(EditorInfo.IME_MASK_ACTION) ?: EditorInfo.IME_ACTION_UNSPECIFIED
         val isMultiLine = info != null && (info.inputType and EditorInfo.TYPE_TEXT_FLAG_MULTI_LINE) != 0
         return when {
+            info != null && isSearchField(info) -> ACTION_LABEL_SEARCH
             isMultiLine -> "Enter"
             actionId == EditorInfo.IME_ACTION_GO -> "Go"
             actionId == EditorInfo.IME_ACTION_NEXT -> "Next"
@@ -414,5 +491,6 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
     companion object {
         private const val CLAFRICA_BEFORE_CURSOR_MAX = 4000
         private const val CLAFRICA_APPLY_DELAY_MS = 45L
+        private const val ACTION_LABEL_SEARCH = "\uD83D\uDD0D"
     }
 }

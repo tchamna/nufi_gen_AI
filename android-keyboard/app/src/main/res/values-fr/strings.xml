@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Clafrica Resulam Plus</string>
+    <string name="ime_name">Clafrica Resulam Plus</string>
+    <string name="ime_subtype_label">Clafrica Resulam Plus</string>
+    <string name="setup_title">Configuration de Clafrica Resulam Plus</string>
+    <string name="setup_body">Configurez le clavier pour votre API Nufi, activez le clavier dans les parametres Android, puis choisissez-le comme methode de saisie active.</string>
+    <string name="base_url_hint">https://votre-app.azurewebsites.net (sans slash final)</string>
+    <string name="save_settings">Enregistrer l’URL de l’API</string>
+    <string name="open_keyboard_settings">Activer Clafrica Resulam Plus</string>
+    <string name="choose_keyboard">Choisir Clafrica Resulam Plus</string>
+    <string name="base_url_required">Entrez d’abord une URL d’API.</string>
+    <string name="settings_saved">Parametres du clavier enregistres.</string>
+    <string name="fetching_suggestions">Recuperation des suggestions...</string>
+    <string name="suggestion_error">Impossible de recuperer les suggestions.</string>
+    <string name="no_suggestions">Aucune suggestion</string>
+    <string name="suggestion_context_template">Mots du contexte utilises : %1$d</string>
+</resources>
