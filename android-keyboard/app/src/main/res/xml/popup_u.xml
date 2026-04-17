@@ -3,18 +3,18 @@
     android:keyHeight="56dp"
     android:keyWidth="16%p">
     <Row>
+        <Key android:codes="249" android:keyLabel="&#249;" />
+        <Key android:codes="250" android:keyLabel="&#250;" />
+        <Key android:codes="363" android:keyLabel="&#363;" />
+        <Key android:codes="468" android:keyLabel="&#468;" />
+        <Key android:codes="251" android:keyLabel="&#251;" />
+    </Row>
+    <Row>
         <Key android:codes="649" android:keyLabel="&#649;" />
         <Key android:codes="2026" android:keyLabel="&#649;&#768;" />
         <Key android:codes="2027" android:keyLabel="&#649;&#769;" />
         <Key android:codes="2028" android:keyLabel="&#649;&#772;" />
         <Key android:codes="2029" android:keyLabel="&#649;&#780;" />
         <Key android:codes="2030" android:keyLabel="&#649;&#770;" />
-    </Row>
-    <Row>
-        <Key android:codes="249" android:keyLabel="&#249;" />
-        <Key android:codes="250" android:keyLabel="&#250;" />
-        <Key android:codes="363" android:keyLabel="&#363;" />
-        <Key android:codes="468" android:keyLabel="&#468;" />
-        <Key android:codes="251" android:keyLabel="&#251;" />
     </Row>
 </Keyboard>

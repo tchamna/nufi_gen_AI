@@ -1,19 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Keyboard xmlns:android="http://schemas.android.com/apk/res/android"
     android:keyHeight="56dp"
-    android:keyWidth="9%p">
+    android:keyWidth="16%p">
     <Row>
         <Key android:codes="224" android:keyLabel="à" />
         <Key android:codes="225" android:keyLabel="á" />
         <Key android:codes="257" android:keyLabel="ā" />
         <Key android:codes="462" android:keyLabel="ǎ" />
         <Key android:codes="226" android:keyLabel="â" />
-        <Key android:codes="609" android:keyLabel="ɑ" />
+    </Row>
+    <Row>
+        <Key android:codes="593" android:keyLabel="ɑ" />
         <Key android:codes="2001" android:keyLabel="ɑ̀" />
         <Key android:codes="2002" android:keyLabel="ɑ́" />
         <Key android:codes="2003" android:keyLabel="ɑ̄" />
         <Key android:codes="2004" android:keyLabel="ɑ̌" />
         <Key android:codes="2005" android:keyLabel="ɑ̂" />
-        <Key android:codes="0" android:keyLabel=" " android:keyWidth="0dp" />
     </Row>
 </Keyboard>
