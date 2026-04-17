@@ -1,41 +1,37 @@
-# Clafrica Resulam Keyboard Update
+Clafrica Resulam Keyboard Update
 
-A new update is now available for the **Clafrica Resulam Keyboard**.
+A new version of the Clafrica Resulam Keyboard is now available.
 
-## What's New
+What's New
 
-- Improved popup behavior on keys and symbols
-- Better special-character access through long press
-- Restored **Clafrica shortcuts** alongside **Nufi SMS shortcuts**
-- Added **calendar date transformations** from the Nufi calendar sheet
-- Added dynamic date shortcuts:
-  - `date*`
-  - `today*`
-  - `now*`
-  - `ze'e*`
-  - `aujourd'hui*`
-  - `aujourdhui*`
-  - `yesterday*`
-  - `*waha`
-  - `tomorrow*`
-  - `waha*`
+- Integrated Nufi SMS shortcuts
 
-   - Added next-word predictions: many inline suggestions while typing
+  Access common Nufi expressions faster with the new SMS shortcuts.
 
-## Examples
+- Smart next-word prediction
 
-- `af1` -> `ɑ̀`
-- `date*` -> today's date in Nufi format
-- `yesterday*` / `*waha` -> yesterday's date
-- `tomorrow*` / `waha*` -> tomorrow's date
+  The keyboard now offers multiple real-time suggestions while typing.
 
-## Improvements Included
+  Example: typing `mbeu33` (mbə̄ə̄) will show suggestions such as `lɑ́`, `mbɑ`, `mēmmɑ̄`, etc.
 
-- Keyboard layout fixes
-- Symbol corrections
-- More reliable popup behavior
-- Smoother typing experience
+  You can tap a suggestion to continue your sentence, or keep typing if needed.
 
-## Action
+- Dynamic date shortcuts
 
-Please install the latest APK and test the new shortcuts and date features.
+  Enter commands like:
+
+  `date*`, `today*`, `now*`, `ze'e*`, `aujourd'hui*`, `aujourdhui*`
+
+  → The keyboard automatically generates the date in the following format:
+
+  Zě'é mɑ́ Nkɑ́ɑ́tēē (Thursday), līē' 16, ngu' 2026
+
+  Likewise:
+
+  `yesterday*`, `*waha` → Wāha kɑ̌' Líé'nkwe' (Wednesday), līē' 15, ngu' 2026
+
+  `tomorrow*`, `waha*` → Wāhá imbɑ̄ Nzêngoo (Friday), līē' 17, ngu' 2026
+
+Action required
+
+Please install the latest APK and test the new shortcuts as well as the date-related features.
