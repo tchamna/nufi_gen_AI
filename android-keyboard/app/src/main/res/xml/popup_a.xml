@@ -3,6 +3,7 @@
     android:keyHeight="56dp"
     android:keyWidth="16%p">
     <Row>
+        <Key android:codes="64" android:keyLabel="@" />
         <Key android:codes="224" android:keyLabel="à" />
         <Key android:codes="225" android:keyLabel="á" />
         <Key android:codes="257" android:keyLabel="ā" />
