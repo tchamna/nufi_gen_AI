@@ -12,6 +12,11 @@ import java.util.regex.Pattern
  */
 class ClafricaEngine(context: Context) {
 
+    private data class DynamicDateAlias(
+        val offsetDays: Long,
+        val intro: String? = null,
+    )
+
     private val tokenMap: Map<String, String>
     private val phraseMap: Map<String, String>
     private val calendarMap: Map<String, String>
@@ -19,7 +24,20 @@ class ClafricaEngine(context: Context) {
     private val phrasePatternsSorted: List<Pair<Regex, String>>
     private val ambiguousKeys: Set<String>
     private val calendarPattern = Regex("(?<![\\p{L}\\p{N}])(\\d{1,2})([ -])(\\d{1,2})\\2(\\d{4})(?![\\p{L}\\p{N}])")
-    private val todayKeywords = setOf("today*", "aujourd'hui*", "aujourdhui*", "date*", "l'nz")
+    private val dynamicDateAliases = mapOf(
+        "today*" to DynamicDateAlias(0L),
+        "aujourd'hui*" to DynamicDateAlias(0L),
+        "aujourdhui*" to DynamicDateAlias(0L),
+        "date*" to DynamicDateAlias(0L),
+        "l'nz" to DynamicDateAlias(0L),
+        "ze'e*" to DynamicDateAlias(0L),
+        "now*" to DynamicDateAlias(0L),
+        "yesterday*" to DynamicDateAlias(-1L, "Wāha kɑ̌'"),
+        "*waha" to DynamicDateAlias(-1L, "Wāha kɑ̌'"),
+        "tomorrow*" to DynamicDateAlias(1L, "Wāhá imbɑ̄"),
+        "waha*" to DynamicDateAlias(1L, "Wāhá imbɑ̄"),
+    )
+    private val defaultCalendarIntro = "Zě'é mɑ́"
 
     init {
         val tokenEntries = LinkedHashMap<String, String>()
@@ -160,9 +178,9 @@ class ClafricaEngine(context: Context) {
     private fun resolveDynamicDateValue(token: String): String? {
         if (calendarMap.isEmpty()) return null
         val normalized = token.lowercase(Locale.ROOT)
-        if (normalized !in todayKeywords) return null
+        val alias = dynamicDateAliases[normalized] ?: return null
 
-        val today = LocalDate.now()
+        val today = LocalDate.now().plusDays(alias.offsetDays)
         val canonical = String.format(
             Locale.ROOT,
             "%02d-%02d-%04d",
@@ -170,7 +188,13 @@ class ClafricaEngine(context: Context) {
             today.monthValue,
             today.year,
         )
-        return calendarMap[canonical]
+        val baseValue = calendarMap[canonical] ?: return null
+        val intro = alias.intro ?: return baseValue
+        return if (baseValue.startsWith("$defaultCalendarIntro ")) {
+            intro + baseValue.removePrefix(defaultCalendarIntro)
+        } else {
+            "$intro, $baseValue"
+        }
     }
 
     private fun mappedValueForCanonicalKey(key: String): String? {
