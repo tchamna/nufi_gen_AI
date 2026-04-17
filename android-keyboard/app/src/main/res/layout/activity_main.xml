@@ -22,32 +22,12 @@
             android:layout_marginTop="8dp"
             android:text="@string/setup_body" />
 
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/baseUrlField"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/base_url_hint"
-                android:inputType="textUri" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/saveButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/save_settings" />
-
         <com.google.android.material.button.MaterialButton
             android:id="@+id/openKeyboardSettingsButton"
             style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="16dp"
             android:text="@string/open_keyboard_settings" />
 
         <com.google.android.material.button.MaterialButton
@@ -57,6 +37,39 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="@string/choose_keyboard" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/layout_section_title"
+            android:textAppearance="@style/TextAppearance.Material3.TitleMedium" />
+
+        <com.google.android.material.button.MaterialButtonToggleGroup
+            android:id="@+id/layoutToggleGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            app:checkedButton="@+id/layoutQwerty"
+            app:selectionRequired="true"
+            app:singleSelection="true">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/layoutQwerty"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/layout_qwerty" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/layoutAzerty"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/layout_azerty" />
+        </com.google.android.material.button.MaterialButtonToggleGroup>
 
     </LinearLayout>
 </ScrollView>

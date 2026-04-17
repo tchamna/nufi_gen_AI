@@ -4,10 +4,9 @@ import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.button.MaterialButtonToggleGroup
 
 class MainActivity : AppCompatActivity() {
     private lateinit var settings: KeyboardSettings
@@ -18,20 +17,19 @@ class MainActivity : AppCompatActivity() {
 
         settings = KeyboardSettings(this)
 
-        val baseUrlField = findViewById<TextInputEditText>(R.id.baseUrlField)
-        val saveButton = findViewById<MaterialButton>(R.id.saveButton)
         val openSettingsButton = findViewById<MaterialButton>(R.id.openKeyboardSettingsButton)
         val chooseKeyboardButton = findViewById<MaterialButton>(R.id.chooseKeyboardButton)
+        val layoutToggleGroup = findViewById<MaterialButtonToggleGroup>(R.id.layoutToggleGroup)
 
-        baseUrlField.setText(settings.getBaseUrl())
-
-        saveButton.setOnClickListener {
-            val value = baseUrlField.text?.toString().orEmpty()
-            if (value.isBlank()) {
-                Toast.makeText(this, R.string.base_url_required, Toast.LENGTH_SHORT).show()
-            } else {
-                settings.setBaseUrl(value)
-                Toast.makeText(this, R.string.settings_saved, Toast.LENGTH_SHORT).show()
+        when (settings.getLayoutType()) {
+            KeyboardSettings.LAYOUT_AZERTY -> layoutToggleGroup.check(R.id.layoutAzerty)
+            else -> layoutToggleGroup.check(R.id.layoutQwerty)
+        }
+        layoutToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (!isChecked) return@addOnButtonCheckedListener
+            when (checkedId) {
+                R.id.layoutAzerty -> settings.setLayoutType(KeyboardSettings.LAYOUT_AZERTY)
+                R.id.layoutQwerty -> settings.setLayoutType(KeyboardSettings.LAYOUT_QWERTY)
             }
         }
 

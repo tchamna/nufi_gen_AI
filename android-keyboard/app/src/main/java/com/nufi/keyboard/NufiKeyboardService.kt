@@ -69,11 +69,13 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
         2030 to "\u0289\u0302",
     )
 
+    private var lastPressedCode = 0
+
     private val longPressRunnable = object : Runnable {
         override fun run() {
             isLongPress = true
             val ic = currentInputConnection
-            if (ic != null) {
+            if (ic != null && lastPressedCode == Keyboard.KEYCODE_DELETE) {
                 ic.beginBatchEdit()
                 val before = ic.getTextBeforeCursor(100, 0)
                 if (before != null && before.isNotEmpty()) {
@@ -111,8 +113,8 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
         suggestionStrip = root.findViewById(R.id.suggestionStrip)
         statusView = root.findViewById(R.id.statusView)
         keyboardView = root.findViewById(R.id.keyboardView)
-        qwertyKeyboard = Keyboard(this, R.xml.qwerty)
-        symbolsKeyboard = Keyboard(this, R.xml.symbols)
+        
+        loadKeyboards()
 
         keyboardView.setPopupParent(root)
         keyboardView.isPreviewEnabled = false
@@ -121,6 +123,25 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
 
         renderSuggestions(emptyList())
         return root
+    }
+
+    private fun loadKeyboards() {
+        qwertyKeyboard = if (settings.getLayoutType() == KeyboardSettings.LAYOUT_AZERTY) {
+            Keyboard(this, R.xml.azerty)
+        } else {
+            Keyboard(this, R.xml.qwerty)
+        }
+        symbolsKeyboard = Keyboard(this, R.xml.symbols)
+    }
+
+    private fun toggleLayout() {
+        val current = settings.getLayoutType()
+        val newLayout = if (current == KeyboardSettings.LAYOUT_QWERTY) KeyboardSettings.LAYOUT_AZERTY else KeyboardSettings.LAYOUT_QWERTY
+        settings.setLayoutType(newLayout)
+        loadKeyboards()
+        setKeyboardLayout(isSymbols)
+        statusView.text = getString(R.string.layout_switched, newLayout.uppercase())
+        mainHandler.postDelayed({ refreshSuggestions() }, 1500)
     }
 
     override fun onEvaluateInputViewShown(): Boolean {
@@ -159,6 +180,10 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
         val inputConnection = currentInputConnection ?: return
         shouldClafrica = false
         when (primaryCode) {
+            KEYCODE_LAYOUT_SWITCH -> {
+                toggleLayout()
+                return
+            }
             Keyboard.KEYCODE_DELETE -> {
                 if (!isLongPress) {
                     inputConnection.deleteSurroundingText(1, 0)
@@ -247,6 +272,7 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
     }
 
     override fun onPress(primaryCode: Int) {
+        lastPressedCode = primaryCode
         if (primaryCode == Keyboard.KEYCODE_DELETE) {
             isLongPress = false
             mainHandler.postDelayed(longPressRunnable, 500)
@@ -492,5 +518,7 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
         private const val CLAFRICA_BEFORE_CURSOR_MAX = 4000
         private const val CLAFRICA_APPLY_DELAY_MS = 45L
         private const val ACTION_LABEL_SEARCH = "\uD83D\uDD0D"
+        /** Custom: switch QWERTY ⟷ AZERTY (must match keyboard XML). */
+        private const val KEYCODE_LAYOUT_SWITCH = -200
     }
 }

@@ -1,6 +1,6 @@
-Mise à jour du Clavier Clafrica Resulam
+Mise à jour du Clavier Clafrica Plus
 
-Une nouvelle version du Clavier Clafrica Resulam est désormais disponible.
+Une nouvelle version du Clavier Clafrica Plus est désormais disponible.
 
 Nouveautés
 

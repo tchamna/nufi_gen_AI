@@ -32,8 +32,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\run_app.ps1
 3. Let Gradle sync.
 4. Install the app on an emulator or device.
 5. Open the app and save the correct API URL.
-6. Enable `Nufi Keyboard` in Android keyboard settings.
-7. Switch the active keyboard to `Nufi Keyboard`.
+6. Enable **Clafrica Plus** in Android keyboard settings.
+7. Switch the active keyboard to **Clafrica Plus**.
 
 ## Updating the Clafrica map
 

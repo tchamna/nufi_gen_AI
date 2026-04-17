@@ -1,6 +1,6 @@
-Clafrica Resulam Keyboard Update
+Clafrica Plus Keyboard Update
 
-A new version of the Clafrica Resulam Keyboard is now available.
+A new version of the Clafrica Plus Keyboard is now available.
 
 What's New
 
