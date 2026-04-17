@@ -41,6 +41,7 @@ The Android keyboard uses two shortcut assets:
 
 - `app/src/main/assets/clafrica.json` for the base **Clafrica** shortcuts from `../clafricaMapping.ts`
 - `app/src/main/assets/nufi_sms.json` for the extra SMS shortcuts from `nufi_sms_and_calendar.xlsx`, sheet `Nufi_SMS`
+- `app/src/main/assets/nufi_calendar.json` for the calendar date expansions from `nufi_sms_and_calendar.xlsx`, sheet `Nufi_Calendar`
 
 To regenerate the JSON asset:
 

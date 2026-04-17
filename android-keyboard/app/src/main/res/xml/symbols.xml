@@ -50,7 +50,7 @@
         <Key android:codes="124" android:keyLabel="|" />
         <Key android:codes="126" android:keyLabel="~" />
         <Key android:codes="96" android:keyLabel="`" />
-        <Key android:codes="163" android:keyLabel="£" />
+        <Key android:codes="95" android:keyLabel="_" />
         <Key android:codes="63" android:keyLabel="?" />
         <Key android:codes="34" android:keyLabel="&quot;" />
         <Key android:codes="58" android:keyLabel=":" />
