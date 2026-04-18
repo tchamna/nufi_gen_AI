@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import re
 import unicodedata
 from functools import lru_cache
@@ -10,7 +11,9 @@ import nufi_model as nm
 
 
 BASE_DIR = Path(__file__).resolve().parent
-AUDIO_MAPPING_PATH = BASE_DIR / "audioMapping.ts"
+AUDIO_MAPPING_CSV_PATH = (
+    BASE_DIR / "android-keyboard" / "app" / "src" / "main" / "assets" / "nufi_word_list.csv"
+)
 _AUDIO_MAPPING_EXPORT = "export const audioMapping"
 _PAIR_RE = re.compile(r'^\s*"((?:[^"\\]|\\.)*)"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,?\s*$')
 
@@ -39,9 +42,23 @@ def normalize_audio_word(word: str) -> str:
     return nm.normalize_text(word).lower().strip()
 
 
-@lru_cache(maxsize=1)
-def load_audio_mapping(mapping_path: str | Path = AUDIO_MAPPING_PATH) -> dict[str, str]:
-    path = Path(mapping_path)
+def _load_audio_mapping_from_csv(path: Path) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    with path.open(encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            key = normalize_audio_word((row.get("nufi_keyword") or "").strip())
+            value = (row.get("audio_file") or "").strip()
+            if key and value:
+                mapping[key] = value
+
+    if not mapping:
+        raise ValueError(f"No audio mappings parsed from {path}")
+
+    return mapping
+
+
+def _load_audio_mapping_from_ts(path: Path) -> dict[str, str]:
     text = path.read_text(encoding="utf-8")
 
     export_index = text.find(_AUDIO_MAPPING_EXPORT)
@@ -72,6 +89,19 @@ def load_audio_mapping(mapping_path: str | Path = AUDIO_MAPPING_PATH) -> dict[st
     return mapping
 
 
+@lru_cache(maxsize=None)
+def load_audio_mapping(mapping_path: str | Path = AUDIO_MAPPING_CSV_PATH) -> dict[str, str]:
+    path = Path(mapping_path)
+    suffix = path.suffix.lower()
+
+    if suffix == ".csv":
+        return _load_audio_mapping_from_csv(path)
+    if suffix == ".ts":
+        return _load_audio_mapping_from_ts(path)
+
+    raise ValueError(f"Unsupported audio mapping format for {path}")
+
+
 @lru_cache(maxsize=1)
 def _normalized_audio_key_index() -> dict[str, tuple[tuple[str, str], ...]]:
     index: dict[str, list[tuple[str, str]]] = {}
@@ -85,15 +115,32 @@ def _assume_low_tone_word(word: str) -> str:
     tokens = []
     changed = False
     for token in word.split():
-        low_tone = nm._first_bare_vowel_to_low_tone_word(token)
-        if low_tone is not None and low_tone != token:
-            tokens.append(low_tone)
+        if not token or nm._has_tone_or_diacritic(token):
+            tokens.append(token)
+            continue
+
+        updated = token
+        token_changed = False
+        for i, ch in enumerate(updated):
+            low_tone = nm._BARE_VOWEL_TO_LOW_TONE.get(ch)
+            if not low_tone:
+                continue
+            updated = updated[:i] + low_tone + updated[i + 1 :]
+            token_changed = True
+
+        if token_changed:
+            tokens.append(updated)
             changed = True
         else:
             tokens.append(token)
     if not changed:
         return word
     return " ".join(tokens)
+
+
+def _is_unmarked_word(word: str) -> bool:
+    tokens = word.split()
+    return bool(tokens) and not any(nm._has_tone_or_diacritic(token) for token in tokens)
 
 
 def get_audio_filename(word: str, mapping: dict[str, str] | None = None) -> str | None:
@@ -117,6 +164,9 @@ def get_audio_filename(word: str, mapping: dict[str, str] | None = None) -> str 
         low_tone_exact = active_mapping.get(low_tone_word)
         if low_tone_exact:
             return low_tone_exact
+
+    if _is_unmarked_word(cleaned_word):
+        return None
 
     normalized_word = _strip_diacritics(cleaned_word)
     if mapping is not None:

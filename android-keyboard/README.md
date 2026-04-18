@@ -63,7 +63,7 @@ The FastAPI app exposes:
 - `HEAD /api/audio/{word}`
 - `GET /api/audio/{word}`
 
-It resolves the word through [`audioMapping.ts`](/c:/Users/tcham/Wokspace/nufi_gen_AI/audioMapping.ts), fetches the MP3 from S3, and streams it back to Android.
+It resolves the word through [`nufi_word_list.csv`](/c:/Users/tcham/Wokspace/nufi_gen_AI/android-keyboard/app/src/main/assets/nufi_word_list.csv), fetches the MP3 from S3, and streams it back to Android.
 
 Required API environment variables:
 

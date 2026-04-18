@@ -1,10 +1,27 @@
 from pathlib import Path
-import csv
 
 import nufi_audio as na
 
 
-def test_load_audio_mapping_parses_ts_export(tmp_path):
+def test_load_audio_mapping_parses_csv_file(tmp_path):
+    mapping_path = tmp_path / "nufi_word_list.csv"
+    mapping_path.write_text(
+        "id,raw_row_id,nufi_keyword,audio_file\n"
+        "1,1,bà,ba1\n"
+        "2,2,mɑ́ kɑ́ lī,makali\n",
+        encoding="utf-8",
+    )
+
+    na.load_audio_mapping.cache_clear()
+    try:
+        mapping = na.load_audio_mapping(mapping_path)
+    finally:
+        na.load_audio_mapping.cache_clear()
+
+    assert mapping == {"bà": "ba1", "mɑ́ kɑ́ lī": "makali"}
+
+
+def test_load_audio_mapping_can_parse_ts_export_when_explicitly_requested(tmp_path):
     mapping_path = tmp_path / "audioMapping.ts"
     mapping_path.write_text(
         'export const audioMapping: Record<string, string> = {\n'
@@ -23,14 +40,14 @@ def test_load_audio_mapping_parses_ts_export(tmp_path):
     assert mapping == {"bà": "ba1", "mɑ́ kɑ́ lī": "makali"}
 
 
-def test_get_audio_filename_finds_exact_and_diacriticless_matches():
+def test_get_audio_filename_requires_low_tone_for_unmarked_input():
     mapping = {
         "bà": "ba1",
         "mɑ́ kɑ́ lī": "makali",
     }
 
     assert na.get_audio_filename("mɑ́ kɑ́ lī", mapping=mapping) == "makali"
-    assert na.get_audio_filename("mɑ kɑ li", mapping=mapping) == "makali"
+    assert na.get_audio_filename("mɑ kɑ li", mapping=mapping) is None
     assert na.get_audio_filename("bà", mapping=mapping) == "ba1"
 
 
@@ -42,10 +59,12 @@ def test_get_audio_filename_prefers_low_tone_for_unmarked_words():
         "tɑ́'": "taf2_g",
         "tɑ̀'": "taf1_g",
         "tɑ̄'": "taf3_g",
+        "ntà'sì": "nta1_gsi1",
     }
 
     assert na.get_audio_filename("mɑ", mapping=mapping) == "maf1"
     assert na.get_audio_filename("tɑ'", mapping=mapping) == "taf1_g"
+    assert na.get_audio_filename("nta'si", mapping=mapping) == "nta1_gsi1"
 
 
 def test_get_audio_filename_does_not_cross_match_different_vowel_families():
@@ -58,28 +77,12 @@ def test_get_audio_filename_does_not_cross_match_different_vowel_families():
     assert na.get_audio_filename("ghʉ̌", mapping=mapping) is None
 
 
-def test_android_audio_catalog_matches_audio_mapping_ts():
-    ts_mapping = na.load_audio_mapping()
-    csv_path = (
-        Path(__file__).resolve().parents[1]
-        / "android-keyboard"
-        / "app"
-        / "src"
-        / "main"
-        / "assets"
-        / "nufi_word_list.csv"
-    )
+def test_audio_mapping_ts_matches_csv_source():
+    csv_mapping = na.load_audio_mapping()
+    ts_path = Path(__file__).resolve().parents[1] / "audioMapping.ts"
+    ts_mapping = na.load_audio_mapping(ts_path)
 
-    csv_mapping = {}
-    with csv_path.open(encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle)
-        for row in reader:
-            key = na.normalize_audio_word((row.get("nufi_keyword") or "").strip())
-            value = (row.get("audio_file") or "").strip()
-            if key and value:
-                csv_mapping[key] = value
-
-    assert csv_mapping == ts_mapping
+    assert ts_mapping == csv_mapping
 
 
 def test_build_s3_audio_url_quotes_filename():
