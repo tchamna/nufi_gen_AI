@@ -16,6 +16,11 @@ def test_clean_text_unifies_modifier_apostrophe_for_bana():
     assert nm.clean_text(w) == "h\u011b'nz\u012b"
 
 
+def test_clean_text_strips_trailing_double_quote_but_keeps_apostrophe():
+    assert nm.clean_text("m\u0251\u0301 k\u0251\u0301 l\u012b\"") == "m\u0251\u0301 k\u0251\u0301 l\u012b"
+    assert nm.clean_text("ng\u01ce'") == "ng\u01ce'"
+
+
 def test_suggest_next_words_bare_vowel_equivalent_to_low_tone():
     # Model only has "pèn" in context; user types "pen" (no accent) → same lookup as pèn
     tokens = [["p\u00e8n", "after"]]
@@ -219,6 +224,15 @@ def test_suggest_next_words_returns_ranked_words():
     assert payload["normalized_text"] == "hello"
     assert payload["suggestions"][0]["word"] == "world"
     assert payload["used_context"] >= 1
+
+
+def test_suggest_next_words_strips_double_quote_from_display_word():
+    tokens = [["m\u0251\u0301", "k\u0251\u0301", "l\u012b\""]]
+    model = nm.build_combined_model(tokens, max_n=3)
+
+    payload = nm.suggest_next_words(model, "m\u0251\u0301 k\u0251\u0301", n=3, limit=3)
+
+    assert payload["suggestions"][0]["word"] == "l\u012b"
 
 
 def test_exclude_french_meta_line():

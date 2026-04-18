@@ -146,6 +146,17 @@
         color: #5a5a52;
         line-height: 1.35;
       }
+
+      .audio-status {
+        margin: 8px 0 0;
+        min-height: 18px;
+        font-size: 13px;
+        color: #5a5a52;
+      }
+
+      .audio-status.error-text {
+        color: #9f1c22;
+      }
     </style>
   </head>
   <body>
@@ -157,10 +168,15 @@
         <input type="checkbox" id="clafrica" checked />
         <label for="clafrica">Clafrica shortcuts</label>
       </div>
+      <div class="clafrica-row">
+        <input type="checkbox" id="audioToggle" />
+        <label for="audioToggle">Play audio on suggestion click</label>
+      </div>
       <p class="clafrica-hint" id="clafrica-hint" hidden>
         Type Latin shortcuts (e.g. <code>af</code>, <code>eu</code>); text is mapped to Nufi characters as you type.
         Turning this on also finalizes any unfinished shortcuts in the box.
       </p>
+      <p class="audio-status" id="audio-status" aria-live="polite"></p>
 
       <!-- Defaults for API (no visible settings UI) -->
       <input type="hidden" id="n" value="4" />

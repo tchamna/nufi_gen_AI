@@ -1,12 +1,16 @@
 import { applyClafricaMapping, finalizeClafricaInput } from "./clafricaMapping.js";
 
 const CLAFRICA_STORAGE_KEY = "nufi-clafrica-enabled";
+const AUDIO_TOGGLE_STORAGE_KEY = "nufi-audio-enabled";
 const DEFAULT_SEED = "ng\u0251\u030c y\u00fa'";
 const keyboardSuggestCache = new Map();
+let currentAudio = null;
 
 const seedEl = document.getElementById("seed");
 const clafricaEl = document.getElementById("clafrica");
 const clafricaHintEl = document.getElementById("clafrica-hint");
+const audioToggleEl = document.getElementById("audioToggle");
+const audioStatusEl = document.getElementById("audio-status");
 const nEl = document.getElementById("n");
 const numCandidatesEl = document.getElementById("numCandidates");
 const maxTokensEl = document.getElementById("maxTokens");
@@ -22,9 +26,20 @@ try {
 } catch (_) {
   clafricaEl.checked = true;
 }
-clafricaHintEl.hidden = !clafricaEl.checked;
 
+try {
+  audioToggleEl.checked = localStorage.getItem(AUDIO_TOGGLE_STORAGE_KEY) === "1";
+} catch (_) {
+  audioToggleEl.checked = false;
+}
+
+clafricaHintEl.hidden = !clafricaEl.checked;
 seedEl.value = DEFAULT_SEED;
+
+function setAudioStatus(message, isError = false) {
+  audioStatusEl.textContent = message || "";
+  audioStatusEl.classList.toggle("error-text", Boolean(isError));
+}
 
 function readGenerateSettings() {
   return {
@@ -51,6 +66,52 @@ function appendSuggestion(word) {
   seedEl.value = current ? `${current} ${word}` : word;
 }
 
+async function playSuggestionAudio(word) {
+  if (!audioToggleEl.checked || !word) {
+    return;
+  }
+
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
+  }
+
+  const audio = new Audio(`/api/audio/${encodeURIComponent(word)}`);
+  currentAudio = audio;
+  setAudioStatus(`Playing ${word}...`);
+
+  audio.addEventListener(
+    "ended",
+    () => {
+      if (currentAudio === audio) {
+        currentAudio = null;
+      }
+      setAudioStatus("");
+    },
+    { once: true }
+  );
+
+  audio.addEventListener(
+    "error",
+    () => {
+      if (currentAudio === audio) {
+        currentAudio = null;
+      }
+      setAudioStatus(`Audio unavailable for ${word}.`, true);
+    },
+    { once: true }
+  );
+
+  try {
+    await audio.play();
+  } catch (_) {
+    if (currentAudio === audio) {
+      currentAudio = null;
+    }
+    setAudioStatus(`Audio unavailable for ${word}.`, true);
+  }
+}
+
 function renderSuggestions(payload, errorMessage) {
   suggestionsEl.innerHTML = "";
   if (errorMessage) {
@@ -74,12 +135,13 @@ function renderSuggestions(payload, errorMessage) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "suggestion";
-    const p = suggestion.score ?? suggestion.probability ?? 0;
+    const probability = suggestion.score ?? suggestion.probability ?? 0;
     const word = suggestion.word;
     button.textContent = word;
-    button.title = typeof p === "number" ? `p ≈ ${p.toFixed(4)}` : "";
+    button.title = typeof probability === "number" ? `p ~= ${probability.toFixed(4)}` : "";
     button.addEventListener("click", async () => {
       appendSuggestion(word);
+      await playSuggestionAudio(word);
       await fetchKeyboardSuggestions();
     });
     li.appendChild(button);
@@ -175,7 +237,21 @@ clafricaEl.addEventListener("change", () => {
   fetchKeyboardSuggestions();
 });
 
-// input: primary; keyup/paste: fallback when input does not fire (some browsers / IME)
+audioToggleEl.addEventListener("change", () => {
+  try {
+    localStorage.setItem(AUDIO_TOGGLE_STORAGE_KEY, audioToggleEl.checked ? "1" : "0");
+  } catch (_) {
+    /* private mode */
+  }
+  if (!audioToggleEl.checked) {
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio = null;
+    }
+    setAudioStatus("");
+  }
+});
+
 seedEl.addEventListener("input", onSeedEdited);
 seedEl.addEventListener("keyup", () => {
   applyLiveClafricaIfEnabled();

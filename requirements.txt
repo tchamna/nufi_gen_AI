@@ -1,5 +1,7 @@
 fastapi
 uvicorn
+boto3
+python-dotenv
 pandas
 nltk
 python-docx

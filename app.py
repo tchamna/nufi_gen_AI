@@ -3,14 +3,37 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+BASE_DIR = Path(__file__).resolve().parent
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from fastapi.responses import Response
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+import requests
 import uvicorn
+try:
+    import boto3
+    from botocore.exceptions import BotoCoreError
+    from botocore.exceptions import ClientError
+    from botocore.exceptions import NoCredentialsError
+except ImportError:  # pragma: no cover - optional dependency for local dev fallback
+    boto3 = None
+    BotoCoreError = Exception
+    ClientError = Exception
+    NoCredentialsError = Exception
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover - optional dependency for local dev convenience
+    load_dotenv = None
 
+import nufi_audio as na
 import nufi_model as nm
+
+if load_dotenv is not None:
+    load_dotenv(BASE_DIR / ".env")
 
 
 def _parse_port() -> int:
@@ -31,6 +54,16 @@ def _cors_origins() -> list[str]:
 
 
 APP_PORT = _parse_port()
+AUDIO_REGION = os.environ.get("AWS_REGION", "us-east-1").strip() or "us-east-1"
+S3_BUCKET_NAME = (
+    os.environ.get("S3_BUCKET_NAME", "dictionnaire-nufi-audio").strip()
+    or "dictionnaire-nufi-audio"
+)
+_AUDIO_TIMEOUT = (5, 30)
+_AUDIO_CHUNK_SIZE = 64 * 1024
+_AUDIO_HTTP = requests.Session()
+_AUDIO_HTTP.headers.update({"User-Agent": "nufi-gen-ai-audio-proxy/1.0"})
+_S3_CLIENT = boto3.client("s3", region_name=AUDIO_REGION) if boto3 is not None else None
 
 
 class GenerateRequest(BaseModel):
@@ -57,7 +90,6 @@ class KeyboardSuggestRequest(BaseModel):
     limit: int = Field(default=5, ge=1, le=8)
 
 
-BASE_DIR = Path(__file__).resolve().parent
 MODEL_PATH = BASE_DIR / "data" / "Nufi" / "Nufi_language_model_api.pickle"
 
 
@@ -103,6 +135,63 @@ def _load_api_model(tokens):
         return model
     _startup_log("Loading model from pickle...")
     return nm.load_model(MODEL_PATH)
+
+
+def _resolve_audio_filename(word: str, audio_id: str | None = None) -> str | None:
+    trimmed_audio_id = "" if audio_id is None else audio_id.strip()
+    if trimmed_audio_id:
+        return trimmed_audio_id
+    return na.get_audio_filename(word)
+
+
+def _build_audio_s3_url(audio_filename: str) -> str:
+    return na.build_s3_audio_url(
+        audio_filename=audio_filename,
+        bucket_name=S3_BUCKET_NAME,
+        region=AUDIO_REGION,
+    )
+
+
+def _audio_response_headers(upstream: requests.Response | None = None) -> dict[str, str]:
+    headers = {
+        "Cache-Control": "private, max-age=3600",
+        "Accept-Ranges": "bytes",
+    }
+    if upstream is not None:
+        content_type = upstream.headers.get("Content-Type")
+        if content_type:
+            headers["Content-Type"] = content_type
+        content_length = upstream.headers.get("Content-Length")
+        if content_length:
+            headers["Content-Length"] = content_length
+        etag = upstream.headers.get("ETag")
+        if etag:
+            headers["ETag"] = etag
+    else:
+        headers["Content-Type"] = "audio/mpeg"
+    return headers
+
+
+def _s3_audio_headers(response: dict) -> dict[str, str]:
+    headers = {
+        "Cache-Control": "private, max-age=3600",
+        "Accept-Ranges": "bytes",
+        "Content-Type": response.get("ContentType", "audio/mpeg"),
+    }
+    content_length = response.get("ContentLength")
+    if content_length is not None:
+        headers["Content-Length"] = str(content_length)
+    etag = response.get("ETag")
+    if etag:
+        headers["ETag"] = etag
+    return headers
+
+
+def _is_not_found_s3_error(exc: Exception) -> bool:
+    if not isinstance(exc, ClientError):
+        return False
+    code = str(exc.response.get("Error", {}).get("Code", ""))
+    return code in {"404", "NoSuchKey", "NotFound"}
 
 
 def load_runtime_state():
@@ -225,6 +314,115 @@ def api_keyboard_suggest(req: KeyboardSuggestRequest):
             for item in payload["suggestions"]
         ],
     }
+
+
+@app.head("/api/audio/{word:path}")
+def api_audio_head(word: str, audio_id: str | None = None):
+    audio_filename = _resolve_audio_filename(word, audio_id=audio_id)
+    if not audio_filename:
+        return Response(status_code=404)
+
+    key = f"{audio_filename}.mp3"
+    if _S3_CLIENT is not None:
+        try:
+            upstream = _S3_CLIENT.head_object(Bucket=S3_BUCKET_NAME, Key=key)
+            return Response(status_code=200, headers=_s3_audio_headers(upstream))
+        except NoCredentialsError:
+            pass
+        except ClientError as exc:
+            if _is_not_found_s3_error(exc):
+                return Response(status_code=404)
+            raise HTTPException(status_code=502, detail="audio storage unavailable") from exc
+        except BotoCoreError as exc:
+            raise HTTPException(status_code=502, detail="audio storage unavailable") from exc
+
+    url = _build_audio_s3_url(audio_filename)
+    try:
+        upstream = _AUDIO_HTTP.head(url, timeout=_AUDIO_TIMEOUT, allow_redirects=True)
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"audio storage unavailable: {exc}") from exc
+
+    if upstream.status_code == 404:
+        return Response(status_code=404)
+    if not upstream.ok:
+        raise HTTPException(
+            status_code=502,
+            detail=f"audio storage returned {upstream.status_code}",
+        )
+
+    return Response(status_code=200, headers=_audio_response_headers(upstream))
+
+
+@app.get("/api/audio/{word:path}")
+def api_audio_get(word: str, audio_id: str | None = None):
+    audio_filename = _resolve_audio_filename(word, audio_id=audio_id)
+    if not audio_filename:
+        raise HTTPException(status_code=404, detail="audio not found")
+
+    key = f"{audio_filename}.mp3"
+    if _S3_CLIENT is not None:
+        try:
+            upstream = _S3_CLIENT.get_object(Bucket=S3_BUCKET_NAME, Key=key)
+
+            def stream_audio():
+                body = upstream["Body"]
+                try:
+                    while True:
+                        chunk = body.read(_AUDIO_CHUNK_SIZE)
+                        if not chunk:
+                            break
+                        yield chunk
+                finally:
+                    body.close()
+
+            return StreamingResponse(
+                stream_audio(),
+                media_type=upstream.get("ContentType", "audio/mpeg"),
+                headers=_s3_audio_headers(upstream),
+            )
+        except NoCredentialsError:
+            pass
+        except ClientError as exc:
+            if _is_not_found_s3_error(exc):
+                raise HTTPException(status_code=404, detail="audio file not found") from exc
+            raise HTTPException(status_code=502, detail="audio storage unavailable") from exc
+        except BotoCoreError as exc:
+            raise HTTPException(status_code=502, detail="audio storage unavailable") from exc
+
+    url = _build_audio_s3_url(audio_filename)
+    try:
+        upstream = _AUDIO_HTTP.get(
+            url,
+            stream=True,
+            timeout=_AUDIO_TIMEOUT,
+            allow_redirects=True,
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"audio storage unavailable: {exc}") from exc
+
+    if upstream.status_code == 404:
+        upstream.close()
+        raise HTTPException(status_code=404, detail="audio file not found")
+    if not upstream.ok:
+        upstream.close()
+        raise HTTPException(
+            status_code=502,
+            detail=f"audio storage returned {upstream.status_code}",
+        )
+
+    def stream_audio():
+        try:
+            for chunk in upstream.iter_content(chunk_size=_AUDIO_CHUNK_SIZE):
+                if chunk:
+                    yield chunk
+        finally:
+            upstream.close()
+
+    return StreamingResponse(
+        stream_audio(),
+        media_type=upstream.headers.get("Content-Type", "audio/mpeg"),
+        headers=_audio_response_headers(upstream),
+    )
 
 
 @app.get("/")

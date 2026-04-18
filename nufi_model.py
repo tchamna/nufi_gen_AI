@@ -205,6 +205,10 @@ def normalize_text(text):
         .replace("\u0060", "'")
         .replace("\u00b4", "'")
         .replace("\u02bc", "'")  # modifier letter apostrophe (common next to ə in orthography)
+        .replace("\u201c", '"')
+        .replace("\u201d", '"')
+        .replace("\u00ab", '"')
+        .replace("\u00bb", '"')
     )
     return unicodedata.normalize("NFC", text)
 
@@ -216,7 +220,7 @@ def clean_text(text, punct=None, apply_ton_bas=True):
         text = normalize_ton_bas(text)
     text = text.lower()
     if punct is None:
-        punct = [".", ",", ";", ":", "!", "?"]
+        punct = [".", ",", ";", ":", "!", "?", '"']
     for mark in punct:
         text = text.replace(mark, "")
     text = text.strip()
