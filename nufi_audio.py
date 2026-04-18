@@ -28,18 +28,30 @@ def _unescape_ts_string(value: str) -> str:
     )
 
 
-def _strip_diacritics(text: str) -> str:
-    return "".join(
-        ch
-        for ch in unicodedata.normalize("NFD", text)
-        if unicodedata.category(ch) != "Mn"
-    )
-
-
 def normalize_audio_word(word: str) -> str:
     if not word:
         return ""
     return nm.normalize_text(word).lower().strip()
+
+
+def _strip_low_tone_only(text: str) -> str:
+    decomposed = unicodedata.normalize("NFD", text)
+    stripped = decomposed.replace("\u0300", "")
+    return unicodedata.normalize("NFC", stripped)
+
+
+def _build_low_tone_key_index(mapping: dict[str, str]) -> dict[str, str]:
+    index: dict[str, str] = {}
+    for key, value in mapping.items():
+        canonical = _strip_low_tone_only(key)
+        previous = index.get(canonical)
+        if previous is not None and previous != value:
+            raise ValueError(
+                f"Conflicting audio mappings for canonical key {canonical!r}: "
+                f"{previous!r} vs {value!r}"
+            )
+        index[canonical] = value
+    return index
 
 
 def _load_audio_mapping_from_csv(path: Path) -> dict[str, str]:
@@ -103,44 +115,8 @@ def load_audio_mapping(mapping_path: str | Path = AUDIO_MAPPING_CSV_PATH) -> dic
 
 
 @lru_cache(maxsize=1)
-def _normalized_audio_key_index() -> dict[str, tuple[tuple[str, str], ...]]:
-    index: dict[str, list[tuple[str, str]]] = {}
-    for key, value in load_audio_mapping().items():
-        normalized_key = _strip_diacritics(key)
-        index.setdefault(normalized_key, []).append((key, value))
-    return {key: tuple(matches) for key, matches in index.items()}
-
-
-def _assume_low_tone_word(word: str) -> str:
-    tokens = []
-    changed = False
-    for token in word.split():
-        if not token or nm._has_tone_or_diacritic(token):
-            tokens.append(token)
-            continue
-
-        updated = token
-        token_changed = False
-        for i, ch in enumerate(updated):
-            low_tone = nm._BARE_VOWEL_TO_LOW_TONE.get(ch)
-            if not low_tone:
-                continue
-            updated = updated[:i] + low_tone + updated[i + 1 :]
-            token_changed = True
-
-        if token_changed:
-            tokens.append(updated)
-            changed = True
-        else:
-            tokens.append(token)
-    if not changed:
-        return word
-    return " ".join(tokens)
-
-
-def _is_unmarked_word(word: str) -> bool:
-    tokens = word.split()
-    return bool(tokens) and not any(nm._has_tone_or_diacritic(token) for token in tokens)
+def _low_tone_audio_key_index() -> dict[str, str]:
+    return _build_low_tone_key_index(load_audio_mapping())
 
 
 def get_audio_filename(word: str, mapping: dict[str, str] | None = None) -> str | None:
@@ -156,37 +132,10 @@ def get_audio_filename(word: str, mapping: dict[str, str] | None = None) -> str 
     if exact:
         return exact
 
-    if cleaned_word in {"bà", "ba\u0300"}:
-        return "ba1"
-
-    low_tone_word = _assume_low_tone_word(cleaned_word)
-    if low_tone_word != cleaned_word:
-        low_tone_exact = active_mapping.get(low_tone_word)
-        if low_tone_exact:
-            return low_tone_exact
-
-    if _is_unmarked_word(cleaned_word):
-        return None
-
-    normalized_word = _strip_diacritics(cleaned_word)
+    canonical = _strip_low_tone_only(cleaned_word)
     if mapping is not None:
-        normalized_matches = tuple(
-            (key, value)
-            for key, value in active_mapping.items()
-            if _strip_diacritics(key) == normalized_word
-        )
-    else:
-        normalized_matches = _normalized_audio_key_index().get(normalized_word, ())
-
-    if len(normalized_matches) == 1:
-        return normalized_matches[0][1]
-
-    if low_tone_word != cleaned_word:
-        for key, value in normalized_matches:
-            if key == low_tone_word:
-                return value
-
-    return None
+        return _build_low_tone_key_index(active_mapping).get(canonical)
+    return _low_tone_audio_key_index().get(canonical)
 
 
 def build_s3_audio_url(

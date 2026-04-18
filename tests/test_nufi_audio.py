@@ -40,41 +40,35 @@ def test_load_audio_mapping_can_parse_ts_export_when_explicitly_requested(tmp_pa
     assert mapping == {"bà": "ba1", "mɑ́ kɑ́ lī": "makali"}
 
 
-def test_get_audio_filename_requires_low_tone_for_unmarked_input():
+def test_get_audio_filename_uses_exact_or_low_tone_canonical_match_only():
     mapping = {
         "bà": "ba1",
+        "mɑ̀": "maf1",
         "mɑ́ kɑ́ lī": "makali",
+        "ntà'sì": "nta1_gsi1",
+        "yɑ̀ɑ̀": "yaf11",
     }
 
-    assert na.get_audio_filename("mɑ́ kɑ́ lī", mapping=mapping) == "makali"
-    assert na.get_audio_filename("mɑ kɑ li", mapping=mapping) is None
     assert na.get_audio_filename("bà", mapping=mapping) == "ba1"
+    assert na.get_audio_filename("mɑ", mapping=mapping) == "maf1"
+    assert na.get_audio_filename("nta'si", mapping=mapping) == "nta1_gsi1"
+    assert na.get_audio_filename("yɑɑ", mapping=mapping) == "yaf11"
+    assert na.get_audio_filename("mɑ́ kɑ́ lī", mapping=mapping) == "makali"
 
 
-def test_get_audio_filename_prefers_low_tone_for_unmarked_words():
+def test_get_audio_filename_does_not_fall_back_to_other_tones():
     mapping = {
         "mɑ́": "maf2",
-        "mɑ̀": "maf1",
         "mɑ̄": "maf3",
-        "tɑ́'": "taf2_g",
-        "tɑ̀'": "taf1_g",
-        "tɑ̄'": "taf3_g",
-        "ntà'sì": "nta1_gsi1",
-    }
-
-    assert na.get_audio_filename("mɑ", mapping=mapping) == "maf1"
-    assert na.get_audio_filename("tɑ'", mapping=mapping) == "taf1_g"
-    assert na.get_audio_filename("nta'si", mapping=mapping) == "nta1_gsi1"
-
-
-def test_get_audio_filename_does_not_cross_match_different_vowel_families():
-    mapping = {
         "ghù": "ghu1",
         "ghʉ̀": "ghuu1",
         "ghʉ̄": "ghuu3",
     }
 
+    assert na.get_audio_filename("mɑ", mapping=mapping) is None
+    assert na.get_audio_filename("mǒ'", mapping=mapping) is None
     assert na.get_audio_filename("ghʉ̌", mapping=mapping) is None
+    assert na.get_audio_filename("lɑ̌'sǐ", mapping=mapping) is None
 
 
 def test_audio_mapping_ts_matches_csv_source():

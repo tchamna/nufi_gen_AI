@@ -19,6 +19,7 @@ class SuggestionAudioCatalog(context: Context) {
 
     private fun loadAudioMap(context: Context): Map<String, String> {
         val map = LinkedHashMap<String, String>()
+        val exclude = loadExcludeSet(context)
         context.assets.open("nufi_word_list.csv").bufferedReader(Charsets.UTF_8).useLines { lines ->
             lines.drop(1).forEach { line ->
                 if (line.isBlank()) return@forEach
@@ -26,12 +27,34 @@ class SuggestionAudioCatalog(context: Context) {
                 if (columns.size < 4) return@forEach
                 val keyword = normalizeKeyword(columns[2])
                 val audioId = columns[3].trim()
-                if (keyword.isNotEmpty() && audioId.isNotEmpty()) {
+                val canonicalKeyword = canonicalLowToneKeyword(keyword)
+                if (
+                    keyword.isNotEmpty() &&
+                    audioId.isNotEmpty() &&
+                    !exclude.contains(keyword) &&
+                    !exclude.contains(canonicalKeyword)
+                ) {
                     map[keyword] = audioId
+                    map.putIfAbsent(canonicalKeyword, audioId)
                 }
             }
         }
         return map
+    }
+
+    private fun loadExcludeSet(context: Context): Set<String> {
+        val set = HashSet<String>()
+        try {
+            context.assets.open("audio_exclude.txt").bufferedReader(Charsets.UTF_8).useLines { lines ->
+                lines.forEach { raw ->
+                    val n = normalizeKeyword(raw)
+                    if (n.isNotEmpty()) set.add(n)
+                }
+            }
+        } catch (e: Exception) {
+            // asset may not exist; treat as empty exclude set
+        }
+        return set
     }
 
     private fun lookupCandidates(raw: String): List<String> {
@@ -41,7 +64,9 @@ class SuggestionAudioCatalog(context: Context) {
         val withoutTrailingPunctuation = normalized.trimEnd('.', ',', ';', ':', '!', '?')
         if (withoutTrailingPunctuation.isNotEmpty()) {
             candidates += withoutTrailingPunctuation
+            candidates += canonicalLowToneKeyword(withoutTrailingPunctuation)
         }
+        candidates += canonicalLowToneKeyword(normalized)
         return candidates.toList()
     }
 
@@ -52,6 +77,14 @@ class SuggestionAudioCatalog(context: Context) {
             .lowercase(Locale.ROOT)
             .replace('\u2018', '\'')
             .replace('\u2019', '\'')
+    }
+
+    private fun canonicalLowToneKeyword(raw: String): String {
+        val normalized = normalizeKeyword(raw)
+        if (normalized.isEmpty()) return ""
+        val stripped = Normalizer.normalize(normalized, Normalizer.Form.NFD)
+            .replace("\u0300", "")
+        return Normalizer.normalize(stripped, Normalizer.Form.NFC)
     }
 
     private fun parseCsvLine(line: String): List<String> {

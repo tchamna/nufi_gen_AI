@@ -9364,45 +9364,23 @@ export const audioMapping: Record<string, string> = {
   "zʉ̀zòh": "zuu1zo1h",
 };
 
-function stripDiacritics(text: string): string {
-  return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+function stripLowToneOnly(text: string): string {
+  const decomposed = text.normalize('NFD');
+  const stripped = decomposed.replace(/\u0300/g, '');
+  return stripped.normalize('NFC');
 }
 
-const LOW_TONE_BY_BASE_CHAR: Record<string, string> = {
-  a: 'à',
-  e: 'è',
-  i: 'ì',
-  o: 'ò',
-  u: 'ù',
-  'ɑ': 'ɑ̀',
-  'ɔ': 'ɔ̀',
-  'ə': 'ə̀',
-  'ɛ': 'ɛ̀',
-  'ʉ': 'ʉ̀',
-};
-
-function hasToneOrDiacritic(text: string): boolean {
-  return /[\u0300-\u036f]/.test(text.normalize('NFD'));
-}
-
-function assumeLowToneWord(word: string): string {
-  const tokens = word.split(/\s+/);
-  let changed = false;
-  const normalizedTokens = tokens.map((token) => {
-    if (!token || hasToneOrDiacritic(token)) {
-      return token;
+const canonicalAudioMapping: Record<string, string> = Object.entries(audioMapping).reduce(
+  (acc, [key, value]) => {
+    const canonicalKey = stripLowToneOnly(key);
+    if (acc[canonicalKey] && acc[canonicalKey] !== value) {
+      throw new Error(`Conflicting audio mapping for canonical key "${canonicalKey}"`);
     }
-    for (let i = 0; i < token.length; i += 1) {
-      const replacement = LOW_TONE_BY_BASE_CHAR[token[i]];
-      if (replacement) {
-        changed = true;
-        return `${token.slice(0, i)}${replacement}${token.slice(i + 1)}`;
-      }
-    }
-    return token;
-  });
-  return changed ? normalizedTokens.join(' ') : word;
-}
+    acc[canonicalKey] = value;
+    return acc;
+  },
+  {} as Record<string, string>
+);
 
 /**
  * Get the audio filename for a dictionary word
@@ -9411,45 +9389,10 @@ function assumeLowToneWord(word: string): string {
  */
 export function getAudioFilename(word: string): string | null {
   if (!word) return null;
-  
-  // Clean the word (convert to lowercase, trim, etc.)
-  // NFC-normalize first so NFD-encoded diacritics (e.g. à = a + combining grave)
-  // match the NFC keys stored in the audioMapping object.
+
+  // NFC-normalize so decomposed accents still match the stored keys.
   const cleanedWord = word.normalize('NFC').toLowerCase().trim();
-  
-  // First try exact match
-  if (audioMapping[cleanedWord]) {
-    return audioMapping[cleanedWord];
-  }
-  
-  // Special case for "bà" which seems problematic in production
-  if (cleanedWord === 'bà' || cleanedWord === 'ba\u0300') {
-    return 'ba1';
-  }
-  
-  const lowToneWord = assumeLowToneWord(cleanedWord);
-  if (lowToneWord !== cleanedWord && audioMapping[lowToneWord]) {
-    return audioMapping[lowToneWord];
-  }
-
-  const normalizedWord = stripDiacritics(cleanedWord);
-  const normalizedMatches = Object.entries(audioMapping).filter(([key]) => {
-    return stripDiacritics(key) === normalizedWord;
-  });
-
-  if (normalizedMatches.length === 1) {
-    return normalizedMatches[0][1];
-  }
-
-  if (lowToneWord !== cleanedWord) {
-    for (const [key, value] of normalizedMatches) {
-      if (key === lowToneWord) {
-        return value;
-      }
-    }
-  }
-  
-  return null;
+  return audioMapping[cleanedWord] || canonicalAudioMapping[stripLowToneOnly(cleanedWord)] || null;
 }
 
 /**
