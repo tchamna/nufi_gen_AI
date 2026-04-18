@@ -2,37 +2,30 @@ package com.nufi.keyboard
 
 import android.content.Context
 import android.media.MediaPlayer
-import android.util.Log
 import android.net.Uri
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.io.IOException
+import kotlinx.coroutines.suspendCancellableCoroutine
 import java.text.Normalizer
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.resume
 
 class SuggestionAudioPlayer(
     context: Context,
-    private val httpClient: OkHttpClient = OkHttpClient(),
 ) {
     private val appContext = context.applicationContext
     private val resolvedUrlCache = ConcurrentHashMap<String, String>()
     private var mediaPlayer: MediaPlayer? = null
-
-    companion object {
-        private const val NOT_FOUND = "NOT_FOUND"
-    }
 
     suspend fun play(baseUrl: String?, word: String?, audioId: String?): Boolean {
         if (baseUrl == null || word == null) {
             Log.e("SuggestionAudioPlayer", "Cannot play: baseUrl or word is null")
             return false
         }
-        val url = resolveAudioUrl(baseUrl = baseUrl, word = word, audioId = audioId) ?: return false
         return withContext(Dispatchers.Main) {
-            playResolvedUrl(url)
+            playResolvedAudio(baseUrl = baseUrl, word = word, audioId = audioId)
         }
     }
 
@@ -41,39 +34,31 @@ class SuggestionAudioPlayer(
         mediaPlayer = null
     }
 
-    private suspend fun resolveAudioUrl(baseUrl: String, word: String, audioId: String?): String? {
+    private suspend fun playResolvedAudio(baseUrl: String, word: String, audioId: String?): Boolean {
         val normalizedWord = normalizeExactAudioWord(word)
         val cacheKey = buildCacheKey(baseUrl = baseUrl, word = normalizedWord, audioId = audioId)
-        
         val cached = resolvedUrlCache[cacheKey]
-        if (cached != null) {
-            Log.d("SuggestionAudioPlayer", "Cache hit for $cacheKey: $cached")
-            return if (cached == NOT_FOUND) null else cached
-        }
-
         val candidates = buildCandidateUrls(baseUrl = baseUrl, word = normalizedWord, audioId = audioId)
-        Log.d("SuggestionAudioPlayer", "Resolving audio for '$word' (normalized: '$normalizedWord'), candidates: $candidates")
-        for (candidate in candidates) {
-            if (urlExists(candidate)) {
-                Log.d("SuggestionAudioPlayer", "Found valid URL: $candidate")
-                try {
-                    if (candidate != null) {
-                        resolvedUrlCache[cacheKey] = candidate
-                    }
-                } catch (e: Exception) {
-                    Log.w("SuggestionAudioPlayer", "Failed to cache resolved URL for $cacheKey", e)
-                }
-                return candidate
+        val orderedCandidates =
+            if (cached != null && candidates.contains(cached)) {
+                listOf(cached) + candidates.filterNot { it == cached }
+            } else {
+                candidates
+            }
+
+        Log.d(
+            "SuggestionAudioPlayer",
+            "Playing audio for '$word' (normalized: '$normalizedWord'), candidates: $orderedCandidates",
+        )
+        for (candidate in orderedCandidates) {
+            if (playResolvedUrl(candidate)) {
+                resolvedUrlCache[cacheKey] = candidate
+                return true
             }
         }
 
-        Log.d("SuggestionAudioPlayer", "No valid URL found for '$word' after checking ${candidates.size} candidates")
-        try {
-            resolvedUrlCache[cacheKey] = NOT_FOUND
-        } catch (e: Exception) {
-            Log.w("SuggestionAudioPlayer", "Failed to cache NOT_FOUND for $cacheKey", e)
-        }
-        return null
+        Log.d("SuggestionAudioPlayer", "No playable audio found for '$word'")
+        return false
     }
 
     private fun buildCacheKey(baseUrl: String, word: String, audioId: String?): String {
@@ -112,33 +97,19 @@ class SuggestionAudioPlayer(
         return candidates
     }
 
-    private suspend fun urlExists(url: String): Boolean = withContext(Dispatchers.IO) {
-        val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", "Clafrica-Android-Keyboard/3.0")
-            .head()
-            .build()
-        try {
-            httpClient.newCall(request).execute().use { response ->
-                Log.d("SuggestionAudioPlayer", "HTTP ${response.code} for $url")
-                response.isSuccessful
-            }
-        } catch (e: Exception) {
-            Log.w("SuggestionAudioPlayer", "urlExists failed for $url: ${e.message}")
-            false
-        }
-    }
-
-    private fun playResolvedUrl(url: String): Boolean {
+    private suspend fun playResolvedUrl(url: String): Boolean = suspendCancellableCoroutine { continuation ->
         release()
 
         Log.d("SuggestionAudioPlayer", "Playing audio from URL: $url")
         val player = MediaPlayer()
-        return try {
+        try {
             player.setDataSource(appContext, Uri.parse(url))
             player.setOnPreparedListener {
                 Log.d("SuggestionAudioPlayer", "MediaPlayer prepared, starting playback for $url")
                 it.start()
+                if (continuation.isActive) {
+                    continuation.resume(true)
+                }
             }
             player.setOnCompletionListener {
                 Log.d("SuggestionAudioPlayer", "Playback completed for $url")
@@ -153,18 +124,28 @@ class SuggestionAudioPlayer(
                 if (mediaPlayer === mp) {
                     mediaPlayer = null
                 }
+                if (continuation.isActive) {
+                    continuation.resume(false)
+                }
                 true
             }
             mediaPlayer = player
+            continuation.invokeOnCancellation {
+                player.release()
+                if (mediaPlayer === player) {
+                    mediaPlayer = null
+                }
+            }
             player.prepareAsync()
-            true
         } catch (e: Exception) {
             Log.e("SuggestionAudioPlayer", "playResolvedUrl exception for $url", e)
             player.release()
             if (mediaPlayer === player) {
                 mediaPlayer = null
             }
-            false
+            if (continuation.isActive) {
+                continuation.resume(false)
+            }
         }
     }
 }

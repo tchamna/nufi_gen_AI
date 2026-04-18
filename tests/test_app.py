@@ -1,7 +1,12 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi.testclient import TestClient
 
 import app
 import nufi_model as nm
+
+
+AUDIO_ROUTE_WORD = "/api/audio/m\u0251\u0301 k\u0251\u0301 l\u012b"
 
 
 def test_generate_endpoint_returns_candidates_matches_and_sources(monkeypatch):
@@ -139,15 +144,27 @@ class _FakeAudioResponse:
 
 
 class _FakeAudioHttp:
-    def __init__(self, head_response=None, get_response=None):
+    def __init__(self, head_response=None):
         self.head_response = head_response or _FakeAudioResponse()
-        self.get_response = get_response or _FakeAudioResponse()
 
     def head(self, url, timeout=None, allow_redirects=None):
         return self.head_response
 
-    def get(self, url, stream=None, timeout=None, allow_redirects=None):
-        return self.get_response
+
+class _FakeS3Client:
+    def __init__(self, presigned_url="https://signed.example/audio.mp3?sig=1"):
+        self.presigned_url = presigned_url
+        self.calls = []
+
+    def generate_presigned_url(self, client_method, Params=None, ExpiresIn=None):
+        self.calls.append(
+            {
+                "client_method": client_method,
+                "Params": Params,
+                "ExpiresIn": ExpiresIn,
+            }
+        )
+        return self.presigned_url
 
 
 def _stub_runtime(monkeypatch):
@@ -169,27 +186,52 @@ def test_audio_head_endpoint_returns_headers(monkeypatch):
     monkeypatch.setattr(app, "_resolve_audio_filename", lambda word, audio_id=None: "makali")
 
     with TestClient(app.app) as client:
-        response = client.head("/api/audio/mɑ́ kɑ́ lī")
+        response = client.head(AUDIO_ROUTE_WORD)
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "audio/mpeg"
-    assert response.headers["cache-control"] == "private, max-age=3600"
+    assert response.headers["cache-control"] == "public, max-age=2592000, stale-while-revalidate=86400"
 
 
-def test_audio_get_endpoint_streams_mp3(monkeypatch):
+def test_audio_get_endpoint_redirects_to_signed_s3_url(monkeypatch):
     _stub_runtime(monkeypatch)
-    monkeypatch.setattr(app, "_S3_CLIENT", None)
-    upstream = _FakeAudioResponse(content=b"mp3-data")
-    monkeypatch.setattr(app, "_AUDIO_HTTP", _FakeAudioHttp(get_response=upstream))
+    fake_s3 = _FakeS3Client()
+    monkeypatch.setattr(app, "_S3_CLIENT", fake_s3)
     monkeypatch.setattr(app, "_resolve_audio_filename", lambda word, audio_id=None: "makali")
 
     with TestClient(app.app) as client:
-        response = client.get("/api/audio/mɑ́ kɑ́ lī")
+        response = client.get(AUDIO_ROUTE_WORD, follow_redirects=False)
 
-    assert response.status_code == 200
-    assert response.content == b"mp3-data"
-    assert response.headers["content-type"] == "audio/mpeg"
-    assert upstream.closed is True
+    assert response.status_code == 302
+    assert response.headers["location"] == "https://signed.example/audio.mp3?sig=1"
+    assert response.headers["cache-control"] == "no-store"
+    assert fake_s3.calls == [
+        {
+            "client_method": "get_object",
+            "Params": {
+                "Bucket": app.S3_BUCKET_NAME,
+                "Key": "makali.mp3",
+                "ResponseCacheControl": "public, max-age=2592000, stale-while-revalidate=86400",
+                "ResponseContentType": "audio/mpeg",
+            },
+            "ExpiresIn": app._AUDIO_PRESIGNED_URL_TTL_SECONDS,
+        }
+    ]
+
+
+def test_audio_get_endpoint_redirects_to_public_s3_url_without_s3_client(monkeypatch):
+    _stub_runtime(monkeypatch)
+    monkeypatch.setattr(app, "_S3_CLIENT", None)
+    monkeypatch.setattr(app, "_resolve_audio_filename", lambda word, audio_id=None: "makali")
+
+    with TestClient(app.app) as client:
+        response = client.get(AUDIO_ROUTE_WORD, follow_redirects=False)
+
+    assert response.status_code == 302
+    assert response.headers["location"] == (
+        "https://dictionnaire-nufi-audio.s3.us-east-1.amazonaws.com/makali.mp3"
+    )
+    assert response.headers["cache-control"] == "no-store"
 
 
 def test_audio_get_endpoint_returns_404_when_mapping_missing(monkeypatch):
@@ -202,3 +244,17 @@ def test_audio_get_endpoint_returns_404_when_mapping_missing(monkeypatch):
 
     assert response.status_code == 404
     assert response.json()["detail"] == "audio not found"
+
+
+def test_s3_audio_headers_normalize_last_modified_to_utc():
+    headers = app._s3_audio_headers(
+        {
+            "ContentType": "audio/mpeg",
+            "ContentLength": 7,
+            "ETag": '"abc123"',
+            "LastModified": datetime(2026, 4, 18, 9, 30, tzinfo=timezone(timedelta(hours=-4))),
+        }
+    )
+
+    assert headers["Cache-Control"] == "public, max-age=2592000, stale-while-revalidate=86400"
+    assert headers["Last-Modified"] == "Sat, 18 Apr 2026 13:30:00 GMT"

@@ -1,6 +1,8 @@
 import os
 import sys
 from contextlib import asynccontextmanager
+from datetime import timezone
+from email.utils import format_datetime
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -8,8 +10,8 @@ BASE_DIR = Path(__file__).resolve().parent
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from fastapi.responses import RedirectResponse
 from fastapi.responses import Response
-from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 import requests
@@ -59,8 +61,13 @@ S3_BUCKET_NAME = (
     os.environ.get("S3_BUCKET_NAME", "dictionnaire-nufi-audio").strip()
     or "dictionnaire-nufi-audio"
 )
+_AUDIO_CACHE_CONTROL = "public, max-age=2592000, stale-while-revalidate=86400"
+_AUDIO_REDIRECT_CACHE_CONTROL = "no-store"
+_AUDIO_PRESIGNED_URL_TTL_SECONDS = max(
+    1,
+    min(604800, int(os.environ.get("AUDIO_PRESIGNED_URL_TTL_SECONDS", "3600"))),
+)
 _AUDIO_TIMEOUT = (5, 30)
-_AUDIO_CHUNK_SIZE = 64 * 1024
 _AUDIO_HTTP = requests.Session()
 _AUDIO_HTTP.headers.update({"User-Agent": "nufi-gen-ai-audio-proxy/1.0"})
 _S3_CLIENT = boto3.client("s3", region_name=AUDIO_REGION) if boto3 is not None else None
@@ -152,9 +159,35 @@ def _build_audio_s3_url(audio_filename: str) -> str:
     )
 
 
+def _build_audio_redirect_url(audio_filename: str) -> str:
+    key = f"{audio_filename}.mp3"
+    if _S3_CLIENT is None:
+        return _build_audio_s3_url(audio_filename)
+
+    try:
+        return _S3_CLIENT.generate_presigned_url(
+            "get_object",
+            Params={
+                "Bucket": S3_BUCKET_NAME,
+                "Key": key,
+                "ResponseCacheControl": _AUDIO_CACHE_CONTROL,
+                "ResponseContentType": "audio/mpeg",
+            },
+            ExpiresIn=_AUDIO_PRESIGNED_URL_TTL_SECONDS,
+        )
+    except NoCredentialsError:
+        return _build_audio_s3_url(audio_filename)
+    except (BotoCoreError, ClientError) as exc:
+        raise HTTPException(status_code=502, detail="audio storage unavailable") from exc
+
+
+def _audio_redirect_headers() -> dict[str, str]:
+    return {"Cache-Control": _AUDIO_REDIRECT_CACHE_CONTROL}
+
+
 def _audio_response_headers(upstream: requests.Response | None = None) -> dict[str, str]:
     headers = {
-        "Cache-Control": "private, max-age=3600",
+        "Cache-Control": _AUDIO_CACHE_CONTROL,
         "Accept-Ranges": "bytes",
     }
     if upstream is not None:
@@ -167,6 +200,9 @@ def _audio_response_headers(upstream: requests.Response | None = None) -> dict[s
         etag = upstream.headers.get("ETag")
         if etag:
             headers["ETag"] = etag
+        last_modified = upstream.headers.get("Last-Modified")
+        if last_modified:
+            headers["Last-Modified"] = last_modified
     else:
         headers["Content-Type"] = "audio/mpeg"
     return headers
@@ -174,7 +210,7 @@ def _audio_response_headers(upstream: requests.Response | None = None) -> dict[s
 
 def _s3_audio_headers(response: dict) -> dict[str, str]:
     headers = {
-        "Cache-Control": "private, max-age=3600",
+        "Cache-Control": _AUDIO_CACHE_CONTROL,
         "Accept-Ranges": "bytes",
         "Content-Type": response.get("ContentType", "audio/mpeg"),
     }
@@ -184,6 +220,13 @@ def _s3_audio_headers(response: dict) -> dict[str, str]:
     etag = response.get("ETag")
     if etag:
         headers["ETag"] = etag
+    last_modified = response.get("LastModified")
+    if last_modified is not None:
+        if last_modified.tzinfo is None:
+            last_modified = last_modified.replace(tzinfo=timezone.utc)
+        else:
+            last_modified = last_modified.astimezone(timezone.utc)
+        headers["Last-Modified"] = format_datetime(last_modified, usegmt=True)
     return headers
 
 
@@ -359,69 +402,10 @@ def api_audio_get(word: str, audio_id: str | None = None):
     if not audio_filename:
         raise HTTPException(status_code=404, detail="audio not found")
 
-    key = f"{audio_filename}.mp3"
-    if _S3_CLIENT is not None:
-        try:
-            upstream = _S3_CLIENT.get_object(Bucket=S3_BUCKET_NAME, Key=key)
-
-            def stream_audio():
-                body = upstream["Body"]
-                try:
-                    while True:
-                        chunk = body.read(_AUDIO_CHUNK_SIZE)
-                        if not chunk:
-                            break
-                        yield chunk
-                finally:
-                    body.close()
-
-            return StreamingResponse(
-                stream_audio(),
-                media_type=upstream.get("ContentType", "audio/mpeg"),
-                headers=_s3_audio_headers(upstream),
-            )
-        except NoCredentialsError:
-            pass
-        except ClientError as exc:
-            if _is_not_found_s3_error(exc):
-                raise HTTPException(status_code=404, detail="audio file not found") from exc
-            raise HTTPException(status_code=502, detail="audio storage unavailable") from exc
-        except BotoCoreError as exc:
-            raise HTTPException(status_code=502, detail="audio storage unavailable") from exc
-
-    url = _build_audio_s3_url(audio_filename)
-    try:
-        upstream = _AUDIO_HTTP.get(
-            url,
-            stream=True,
-            timeout=_AUDIO_TIMEOUT,
-            allow_redirects=True,
-        )
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"audio storage unavailable: {exc}") from exc
-
-    if upstream.status_code == 404:
-        upstream.close()
-        raise HTTPException(status_code=404, detail="audio file not found")
-    if not upstream.ok:
-        upstream.close()
-        raise HTTPException(
-            status_code=502,
-            detail=f"audio storage returned {upstream.status_code}",
-        )
-
-    def stream_audio():
-        try:
-            for chunk in upstream.iter_content(chunk_size=_AUDIO_CHUNK_SIZE):
-                if chunk:
-                    yield chunk
-        finally:
-            upstream.close()
-
-    return StreamingResponse(
-        stream_audio(),
-        media_type=upstream.headers.get("Content-Type", "audio/mpeg"),
-        headers=_audio_response_headers(upstream),
+    return RedirectResponse(
+        url=_build_audio_redirect_url(audio_filename),
+        status_code=302,
+        headers=_audio_redirect_headers(),
     )
 
 
