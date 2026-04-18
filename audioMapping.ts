@@ -9364,6 +9364,46 @@ export const audioMapping: Record<string, string> = {
   "zʉ̀zòh": "zuu1zo1h",
 };
 
+function stripDiacritics(text: string): string {
+  return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+const LOW_TONE_BY_BASE_CHAR: Record<string, string> = {
+  a: 'à',
+  e: 'è',
+  i: 'ì',
+  o: 'ò',
+  u: 'ù',
+  'ɑ': 'ɑ̀',
+  'ɔ': 'ɔ̀',
+  'ə': 'ə̀',
+  'ɛ': 'ɛ̀',
+  'ʉ': 'ʉ̀',
+};
+
+function hasToneOrDiacritic(text: string): boolean {
+  return /[\u0300-\u036f]/.test(text.normalize('NFD'));
+}
+
+function assumeLowToneWord(word: string): string {
+  const tokens = word.split(/\s+/);
+  let changed = false;
+  const normalizedTokens = tokens.map((token) => {
+    if (!token || hasToneOrDiacritic(token)) {
+      return token;
+    }
+    for (let i = 0; i < token.length; i += 1) {
+      const replacement = LOW_TONE_BY_BASE_CHAR[token[i]];
+      if (replacement) {
+        changed = true;
+        return `${token.slice(0, i)}${replacement}${token.slice(i + 1)}`;
+      }
+    }
+    return token;
+  });
+  return changed ? normalizedTokens.join(' ') : word;
+}
+
 /**
  * Get the audio filename for a dictionary word
  * @param word The dictionary word
@@ -9387,33 +9427,23 @@ export function getAudioFilename(word: string): string | null {
     return 'ba1';
   }
   
-  // Try to find a close match by normalizing diacritics
-  const normalizedWord = cleanedWord.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  
-  // First check if we have a direct mapping for the normalized word with a tone number
-  // For example, if normalizedWord is "ba", check for "ba1", "ba2", etc.
-  for (let i = 1; i <= 7; i++) {
-    const toneKey = `${normalizedWord}${i}`;
-    if (Object.values(audioMapping).includes(toneKey)) {
-      return toneKey;
-    }
+  const lowToneWord = assumeLowToneWord(cleanedWord);
+  if (lowToneWord !== cleanedWord && audioMapping[lowToneWord]) {
+    return audioMapping[lowToneWord];
   }
-  
-  // Try to match by normalizing both the word and keys in the mapping
-  for (const [key, value] of Object.entries(audioMapping)) {
-    const normalizedKey = key.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    if (normalizedKey === normalizedWord) {
-      return value;
-    }
+
+  const normalizedWord = stripDiacritics(cleanedWord);
+  const normalizedMatches = Object.entries(audioMapping).filter(([key]) => {
+    return stripDiacritics(key) === normalizedWord;
+  });
+
+  if (normalizedMatches.length === 1) {
+    return normalizedMatches[0][1];
   }
-  
-  // Last resort: try to match just the base character without diacritics
-  // This is a more aggressive fallback
-  if (normalizedWord.length === 1) {
-    const baseChar = normalizedWord.charAt(0);
-    for (const [key, value] of Object.entries(audioMapping)) {
-      if (key.normalize('NFD').replace(/[\u0300-\u036f]/g, '').charAt(0) === baseChar && 
-          value.startsWith(baseChar)) {
+
+  if (lowToneWord !== cleanedWord) {
+    for (const [key, value] of normalizedMatches) {
+      if (key === lowToneWord) {
         return value;
       }
     }

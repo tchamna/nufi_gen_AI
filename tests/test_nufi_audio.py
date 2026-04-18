@@ -47,6 +47,16 @@ def test_get_audio_filename_prefers_low_tone_for_unmarked_words():
     assert na.get_audio_filename("tɑ'", mapping=mapping) == "taf1_g"
 
 
+def test_get_audio_filename_does_not_cross_match_different_vowel_families():
+    mapping = {
+        "ghù": "ghu1",
+        "ghʉ̀": "ghuu1",
+        "ghʉ̄": "ghuu3",
+    }
+
+    assert na.get_audio_filename("ghʉ̌", mapping=mapping) is None
+
+
 def test_build_s3_audio_url_quotes_filename():
     url = na.build_s3_audio_url(
         audio_filename="mɑ́_kɑ́_lī",
