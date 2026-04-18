@@ -22,12 +22,15 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
     private lateinit var keyboardView: NufiKeyboardView
     private lateinit var suggestionStrip: LinearLayout
     private lateinit var statusView: TextView
+    private lateinit var audioToggleButton: Button
     private lateinit var qwertyKeyboard: Keyboard
     private lateinit var symbolsKeyboard: Keyboard
     private var isSymbols = false
     private lateinit var apiClient: KeyboardApiClient
     private lateinit var settings: KeyboardSettings
     private var clafricaEngine: ClafricaEngine? = null
+    private var suggestionAudioCatalog: SuggestionAudioCatalog? = null
+    private var suggestionAudioPlayer: SuggestionAudioPlayer? = null
 
     private val serviceScope = CoroutineScope(Dispatchers.Main)
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -80,6 +83,9 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
                 deleteSelectionOrPreviousWordOrCharacter(ic)
                 ic.endBatchEdit()
                 mainHandler.postDelayed(this, 300)
+            } else if (ic != null && lastPressedCode == 32) {
+                // Toggle layout on Space long-press
+                toggleLayout()
             }
         }
     }
@@ -101,12 +107,19 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
         apiClient = KeyboardApiClient()
         settings = KeyboardSettings(this)
         clafricaEngine = ClafricaEngine(this)
+        try {
+            suggestionAudioCatalog = SuggestionAudioCatalog(this)
+            suggestionAudioPlayer = SuggestionAudioPlayer(this)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     override fun onCreateInputView(): View {
         val root = layoutInflater.inflate(R.layout.input_view, null)
         suggestionStrip = root.findViewById(R.id.suggestionStrip)
         statusView = root.findViewById(R.id.statusView)
+        audioToggleButton = root.findViewById(R.id.audioToggleButton)
         keyboardView = root.findViewById(R.id.keyboardView)
         
         loadKeyboards()
@@ -115,6 +128,16 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
         keyboardView.isPreviewEnabled = false
         keyboardView.setOnKeyboardActionListener(this)
         setKeyboardLayout(false)
+        updateAudioToggleButton()
+        audioToggleButton.setOnClickListener {
+            val enabled = !settings.isSuggestionAudioEnabled()
+            settings.setSuggestionAudioEnabled(enabled)
+            updateAudioToggleButton()
+            statusView.text =
+                getString(
+                    if (enabled) R.string.audio_enabled_status else R.string.audio_disabled_status
+                )
+        }
 
         renderSuggestions(emptyList())
         return root
@@ -166,6 +189,7 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
     override fun onDestroy() {
         mainHandler.removeCallbacks(clafricaApplyRunnable)
         mainHandler.removeCallbacks(suggestRunnable)
+        suggestionAudioPlayer?.release()
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -301,14 +325,14 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
 
     override fun onPress(primaryCode: Int) {
         lastPressedCode = primaryCode
-        if (primaryCode == Keyboard.KEYCODE_DELETE) {
+        if (primaryCode == Keyboard.KEYCODE_DELETE || primaryCode == 32) {
             isLongPress = false
             mainHandler.postDelayed(longPressRunnable, 500)
         }
     }
 
     override fun onRelease(primaryCode: Int) {
-        if (primaryCode == Keyboard.KEYCODE_DELETE) {
+        if (primaryCode == Keyboard.KEYCODE_DELETE || primaryCode == 32) {
             mainHandler.removeCallbacks(longPressRunnable)
         }
     }
@@ -513,6 +537,36 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
         }
     }
 
+    private fun updateAudioToggleButton() {
+        if (!::audioToggleButton.isInitialized) return
+        audioToggleButton.text =
+            getString(
+                if (settings.isSuggestionAudioEnabled()) {
+                    R.string.audio_toggle_on
+                } else {
+                    R.string.audio_toggle_off
+                }
+            )
+    }
+
+    private fun playSuggestionAudioIfEnabled(suggestionWord: String) {
+        if (!settings.isSuggestionAudioEnabled() || !::statusView.isInitialized) return
+        val catalog = suggestionAudioCatalog ?: return
+        val audioId = catalog.findAudioIdForSuggestion(suggestionWord)
+        val player = suggestionAudioPlayer ?: return
+        val baseUrl = settings.getBaseUrl()
+        serviceScope.launch {
+            val started = player.play(
+                baseUrl = baseUrl,
+                word = suggestionWord,
+                audioId = audioId,
+            )
+            if (!started && ::statusView.isInitialized) {
+                statusView.text = getString(R.string.audio_unavailable)
+            }
+        }
+    }
+
     private fun renderSuggestions(suggestions: List<KeyboardSuggestion>) {
         if (!::suggestionStrip.isInitialized) return
         suggestionStrip.removeAllViews()
@@ -536,6 +590,7 @@ class NufiKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionL
                 val spacePrefix = if (before.isNullOrEmpty() || before.last().isWhitespace()) "" else " "
                 ic.commitText("$spacePrefix${suggestion.word} ", 1)
                 applyClafricaToTextBeforeCursorNow(ic)
+                playSuggestionAudioIfEnabled(suggestion.word)
                 refreshSuggestions()
             }
             suggestionStrip.addView(button)

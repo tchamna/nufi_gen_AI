@@ -17,6 +17,13 @@ class KeyboardSettings(context: Context) {
         prefs.edit().putString(KEY_LAYOUT_TYPE, layout).apply()
     }
 
+    fun isSuggestionAudioEnabled(): Boolean =
+        prefs.getBoolean(KEY_SUGGESTION_AUDIO_ENABLED, false)
+
+    fun setSuggestionAudioEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_SUGGESTION_AUDIO_ENABLED, enabled).apply()
+    }
+
     companion object {
         const val LAYOUT_QWERTY = "qwerty"
         const val LAYOUT_AZERTY = "azerty"
@@ -24,6 +31,7 @@ class KeyboardSettings(context: Context) {
         private const val PREFS_NAME = "nufi_keyboard_settings"
         private const val KEY_BASE_URL = "base_url"
         private const val KEY_LAYOUT_TYPE = "layout_type"
+        private const val KEY_SUGGESTION_AUDIO_ENABLED = "suggestion_audio_enabled"
         const val DEFAULT_BASE_URL =
             "https://nufi-gen-ai-dug3ggdsh3fze9e5.canadacentral-01.azurewebsites.net"
     }

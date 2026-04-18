@@ -54,6 +54,22 @@ python .\tools\generate_clafrica_from_sms.py
 
 Then rebuild the APK.
 
+## Audio
+
+Suggestion audio should be served by the same API base URL as predictions.
+
+The FastAPI app exposes:
+
+- `HEAD /api/audio/{word}`
+- `GET /api/audio/{word}`
+
+It resolves the word through [`audioMapping.ts`](/c:/Users/tcham/Wokspace/nufi_gen_AI/audioMapping.ts), fetches the MP3 from S3, and streams it back to Android.
+
+Required API environment variables:
+
+- `AWS_REGION=us-east-1`
+- `S3_BUCKET_NAME=dictionnaire-nufi-audio`
+
 ## Notes
 
 - This is a first IME scaffold, not a finished production keyboard.

@@ -19,4 +19,10 @@
     <string name="suggestion_error">Could not fetch suggestions.</string>
     <string name="no_suggestions">No suggestions</string>
     <string name="suggestion_context_template">Context words used: %1$d</string>
+    <string name="audio_toggle_on">Audio On</string>
+    <string name="audio_toggle_off">Audio Off</string>
+    <string name="audio_enabled_status">Suggestion audio enabled</string>
+    <string name="audio_disabled_status">Suggestion audio disabled</string>
+    <string name="audio_missing_for_word">No audio found for %1$s</string>
+    <string name="audio_unavailable">Audio is unavailable right now.</string>
 </resources>

@@ -4,12 +4,12 @@
     <string name="ime_name">Clafrica Plus</string>
     <string name="ime_subtype_label">Clafrica Plus</string>
     <string name="setup_title">Configuration de Clafrica Plus</string>
-    <string name="setup_body">Activez Clafrica Plus dans les paramètres Android, puis choisissez-le comme clavier. Choisissez QWERTY ou AZERTY ci-dessous.</string>
+    <string name="setup_body">Activez Clafrica Plus dans les parametres Android, puis choisissez-le comme clavier. Choisissez QWERTY ou AZERTY ci-dessous.</string>
     <string name="base_url_hint">https://votre-app.azurewebsites.net (sans slash final)</string>
-    <string name="save_settings">Enregistrer l’URL de l’API</string>
+    <string name="save_settings">Enregistrer l URL de l API</string>
     <string name="open_keyboard_settings">Activer Clafrica Plus</string>
     <string name="choose_keyboard">Choisir Clafrica Plus</string>
-    <string name="base_url_required">Entrez d’abord une URL d’API.</string>
+    <string name="base_url_required">Entrez d abord une URL d API.</string>
     <string name="settings_saved">Parametres du clavier enregistres.</string>
     <string name="layout_section_title">Disposition du clavier</string>
     <string name="layout_qwerty">QWERTY</string>
@@ -19,4 +19,10 @@
     <string name="suggestion_error">Impossible de recuperer les suggestions.</string>
     <string name="no_suggestions">Aucune suggestion</string>
     <string name="suggestion_context_template">Mots du contexte utilises : %1$d</string>
+    <string name="audio_toggle_on">Audio actif</string>
+    <string name="audio_toggle_off">Audio inactif</string>
+    <string name="audio_enabled_status">Audio des suggestions active</string>
+    <string name="audio_disabled_status">Audio des suggestions inactive</string>
+    <string name="audio_missing_for_word">Aucun audio pour %1$s</string>
+    <string name="audio_unavailable">Audio indisponible pour le moment.</string>
 </resources>
