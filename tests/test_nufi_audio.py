@@ -33,6 +33,20 @@ def test_get_audio_filename_finds_exact_and_diacriticless_matches():
     assert na.get_audio_filename("bà", mapping=mapping) == "ba1"
 
 
+def test_get_audio_filename_prefers_low_tone_for_unmarked_words():
+    mapping = {
+        "mɑ́": "maf2",
+        "mɑ̀": "maf1",
+        "mɑ̄": "maf3",
+        "tɑ́'": "taf2_g",
+        "tɑ̀'": "taf1_g",
+        "tɑ̄'": "taf3_g",
+    }
+
+    assert na.get_audio_filename("mɑ", mapping=mapping) == "maf1"
+    assert na.get_audio_filename("tɑ'", mapping=mapping) == "taf1_g"
+
+
 def test_build_s3_audio_url_quotes_filename():
     url = na.build_s3_audio_url(
         audio_filename="mɑ́_kɑ́_lī",

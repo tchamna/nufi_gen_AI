@@ -73,17 +73,27 @@ def load_audio_mapping(mapping_path: str | Path = AUDIO_MAPPING_PATH) -> dict[st
 
 
 @lru_cache(maxsize=1)
-def _normalized_audio_key_index() -> dict[str, str]:
-    index: dict[str, str] = {}
+def _normalized_audio_key_index() -> dict[str, tuple[tuple[str, str], ...]]:
+    index: dict[str, list[tuple[str, str]]] = {}
     for key, value in load_audio_mapping().items():
         normalized_key = _strip_diacritics(key)
-        index.setdefault(normalized_key, value)
-    return index
+        index.setdefault(normalized_key, []).append((key, value))
+    return {key: tuple(matches) for key, matches in index.items()}
 
 
-@lru_cache(maxsize=1)
-def _audio_value_set() -> set[str]:
-    return set(load_audio_mapping().values())
+def _assume_low_tone_word(word: str) -> str:
+    tokens = []
+    changed = False
+    for token in word.split():
+        low_tone = nm._first_bare_vowel_to_low_tone_word(token)
+        if low_tone is not None and low_tone != token:
+            tokens.append(low_tone)
+            changed = True
+        else:
+            tokens.append(token)
+    if not changed:
+        return word
+    return " ".join(tokens)
 
 
 def get_audio_filename(word: str, mapping: dict[str, str] | None = None) -> str | None:
@@ -102,27 +112,28 @@ def get_audio_filename(word: str, mapping: dict[str, str] | None = None) -> str 
     if cleaned_word in {"bà", "ba\u0300"}:
         return "ba1"
 
+    low_tone_word = _assume_low_tone_word(cleaned_word)
+    if low_tone_word != cleaned_word:
+        low_tone_exact = active_mapping.get(low_tone_word)
+        if low_tone_exact:
+            return low_tone_exact
+
     normalized_word = _strip_diacritics(cleaned_word)
-    value_set = set(active_mapping.values()) if mapping is not None else _audio_value_set()
-    for tone in range(1, 8):
-        tone_key = f"{normalized_word}{tone}"
-        if tone_key in value_set:
-            return tone_key
-
     if mapping is not None:
-        for key, value in active_mapping.items():
-            if _strip_diacritics(key) == normalized_word:
-                return value
+        normalized_matches = tuple(
+            (key, value)
+            for key, value in active_mapping.items()
+            if _strip_diacritics(key) == normalized_word
+        )
     else:
-        normalized_match = _normalized_audio_key_index().get(normalized_word)
-        if normalized_match:
-            return normalized_match
+        normalized_matches = _normalized_audio_key_index().get(normalized_word, ())
 
-    if len(normalized_word) == 1:
-        base_char = normalized_word[0]
-        for key, value in active_mapping.items():
-            normalized_key = _strip_diacritics(key)
-            if normalized_key[:1] == base_char and value.startswith(base_char):
+    if len(normalized_matches) == 1:
+        return normalized_matches[0][1]
+
+    if low_tone_word != cleaned_word:
+        for key, value in normalized_matches:
+            if key == low_tone_word:
                 return value
 
     return None
