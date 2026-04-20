@@ -32,9 +32,24 @@ The uploaded artifact contains:
 Create these GitHub Actions settings:
 
 - `AZURE_WEBAPP_NAME`: App Service name, as either a **repository variable** or a **repository secret** (both are supported)
-- repository secret: `AZURE_CREDENTIALS` — JSON for a service principal that can deploy to that app (for example the output of `az ad sp create-for-rbac --name "<name>" --role contributor --scopes /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Web/sites/<app> --sdk-auth`)
 
-The workflow runs `azure/login` with that secret, then `azure/webapps-deploy` without a publish profile.
+**Authentication (pick one):**
+
+1. **Single secret `AZURE_CREDENTIALS`** — must be **valid JSON** with `clientId`, `clientSecret`, `subscriptionId`, and `tenantId`. The reliable way to produce that shape is Azure CLI with **`--sdk-auth`** (not the default `create-for-rbac` output, which uses `appId` / `password` / `tenant` and often omits `subscriptionId`):
+
+   ```bash
+   az ad sp create-for-rbac \
+     --name "github-nufi-deploy" \
+     --role contributor \
+     --scopes /subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<RG>/providers/Microsoft.Web/sites/<APP_NAME> \
+     --sdk-auth
+   ```
+
+   Paste the **entire** JSON object into the `AZURE_CREDENTIALS` secret (no markdown fences, no extra text).
+
+2. **Four repository secrets** (same values as in that JSON, split out): `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_SUBSCRIPTION_ID`, `AZURE_TENANT_ID`. If all four are set, they take precedence over `AZURE_CREDENTIALS`.
+
+The workflow runs `az login --service-principal`, then `azure/webapps-deploy` without a publish profile.
 
 If `AZURE_WEBAPP_NAME` is not set, the deploy step is skipped and CI still passes.
 

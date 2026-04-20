@@ -74,37 +74,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # secrets.* is not allowed in step if: on some GitHub setups; gate in bash instead.
+      # secrets.* is not allowed in step if: on some GitHub setups; resolve creds in a script instead.
       - name: Prepare Azure deploy
         id: azure_gate
         env:
           APP_VAR: ${{ vars.AZURE_WEBAPP_NAME }}
           APP_SECRET: ${{ secrets.AZURE_WEBAPP_NAME }}
           AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
-        run: |
-          APP_NAME="$APP_VAR"
-          if [ -z "$APP_NAME" ]; then APP_NAME="$APP_SECRET"; fi
-          if [ -n "$APP_NAME" ] && [ -n "$AZURE_CREDENTIALS" ]; then
-            echo "deploy=true" >> "$GITHUB_OUTPUT"
-            {
-              echo "DEPLOY_APP_NAME<<__APP__"
-              echo "$APP_NAME"
-              echo "__APP__"
-            } >> "$GITHUB_ENV"
-          else
-            echo "deploy=false" >> "$GITHUB_OUTPUT"
-            if [ -z "$APP_NAME" ]; then
-              echo "::notice::Set repository variable or secret AZURE_WEBAPP_NAME to enable deploy. See docs/github-actions.md"
-            elif [ -z "$AZURE_CREDENTIALS" ]; then
-              echo "::notice::AZURE_WEBAPP_NAME is set but AZURE_CREDENTIALS is missing. Add that repository secret to enable deploy."
-            fi
-          fi
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        run: python3 .github/scripts/prepare_azure_deploy.py
 
-      - name: Azure Login (service principal)
+      - name: Azure CLI login (service principal)
         if: steps.azure_gate.outputs.deploy == 'true'
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+        run: |
+          set -e
+          az login --service-principal \
+            -u "$AZURE_LOGIN_CLIENT_ID" \
+            -p "$AZURE_LOGIN_CLIENT_SECRET" \
+            --tenant "$AZURE_LOGIN_TENANT_ID"
+          az account set --subscription "$AZURE_LOGIN_SUBSCRIPTION_ID"
 
       - name: Deploy to Azure Web App (service principal)
         if: steps.azure_gate.outputs.deploy == 'true'

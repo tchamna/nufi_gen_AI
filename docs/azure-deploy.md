@@ -21,7 +21,7 @@ Use `.github/workflows/ci.yml`.
 Required GitHub settings:
 
 - repository variable or secret: `AZURE_WEBAPP_NAME`
-- repository secret: `AZURE_CREDENTIALS` (service principal JSON used by `azure/login` in CI)
+- `AZURE_CREDENTIALS` (JSON) or the four secrets `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_SUBSCRIPTION_ID`, `AZURE_TENANT_ID` — see `docs/github-actions.md`
 
 ## Startup Command
 

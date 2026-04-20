@@ -50,7 +50,7 @@ The repo now uses one GitHub Actions workflow: `.github/workflows/ci.yml`.
 Azure deploy uses:
 
 - repository variable or secret: `AZURE_WEBAPP_NAME`
-- repository secret: `AZURE_CREDENTIALS` (service principal JSON for `azure/login`)
+- `AZURE_CREDENTIALS` (full service principal JSON from `az ad sp create-for-rbac ... --sdk-auth`) **or** secrets `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_SUBSCRIPTION_ID`, `AZURE_TENANT_ID`
 
 See `docs/github-actions.md` and `docs/azure-deploy.md`.
 
