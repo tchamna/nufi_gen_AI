@@ -73,25 +73,42 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Validate Azure deploy configuration (basic)
-        if: ${{ (vars.AZURE_WEBAPP_NAME || secrets.AZURE_WEBAPP_NAME) == '' }}
+
+      # secrets.* is not allowed in step if: on some GitHub setups; gate in bash instead.
+      - name: Prepare Azure deploy
+        id: azure_gate
+        env:
+          APP_VAR: ${{ vars.AZURE_WEBAPP_NAME }}
+          APP_SECRET: ${{ secrets.AZURE_WEBAPP_NAME }}
+          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
         run: |
-          echo "Set repository variable or secret AZURE_WEBAPP_NAME to enable deploy. See docs/github-actions.md"
+          APP_NAME="$APP_VAR"
+          if [ -z "$APP_NAME" ]; then APP_NAME="$APP_SECRET"; fi
+          if [ -n "$APP_NAME" ] && [ -n "$AZURE_CREDENTIALS" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "DEPLOY_APP_NAME<<__APP__"
+              echo "$APP_NAME"
+              echo "__APP__"
+            } >> "$GITHUB_ENV"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            if [ -z "$APP_NAME" ]; then
+              echo "::notice::Set repository variable or secret AZURE_WEBAPP_NAME to enable deploy. See docs/github-actions.md"
+            elif [ -z "$AZURE_CREDENTIALS" ]; then
+              echo "::notice::AZURE_WEBAPP_NAME is set but AZURE_CREDENTIALS is missing. Add that repository secret to enable deploy."
+            fi
+          fi
 
       - name: Azure Login (service principal)
-        if: ${{ secrets.AZURE_CREDENTIALS != '' }}
+        if: steps.azure_gate.outputs.deploy == 'true'
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Deploy to Azure Web App (service principal)
-        if: ${{ (vars.AZURE_WEBAPP_NAME || secrets.AZURE_WEBAPP_NAME) != '' && secrets.AZURE_CREDENTIALS != '' }}
+        if: steps.azure_gate.outputs.deploy == 'true'
         uses: azure/webapps-deploy@v3
         with:
-          app-name: ${{ vars.AZURE_WEBAPP_NAME || secrets.AZURE_WEBAPP_NAME }}
+          app-name: ${{ env.DEPLOY_APP_NAME }}
           package: .
-
-      - name: Skip Azure (no service principal configured)
-        if: ${{ (vars.AZURE_WEBAPP_NAME || secrets.AZURE_WEBAPP_NAME) != '' && secrets.AZURE_CREDENTIALS == '' }}
-        run: |
-          echo "AZURE_WEBAPP_NAME is set but AZURE_CREDENTIALS is missing. Add repository secret AZURE_CREDENTIALS (JSON from a service principal with deploy rights) to enable deploy. See docs/github-actions.md"
