@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nufi Word Stats</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: system-ui, Segoe UI, Arial, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        padding: 16px;
+        background: #f5f5f2;
+        color: #161616;
+      }
+
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+
+      .nav {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+
+      .nav a {
+        color: #0f5d44;
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      .nav a:hover {
+        text-decoration: underline;
+      }
+
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .metric {
+        border: 1px solid #d8d8d2;
+        background: #fff;
+        border-radius: 8px;
+        padding: 14px;
+      }
+
+      .metric .label {
+        font-size: 13px;
+        color: #5a5a52;
+        margin-bottom: 6px;
+      }
+
+      .metric .value {
+        font-size: 30px;
+        font-weight: 700;
+      }
+
+      .band {
+        background: #fff;
+        border: 1px solid #d8d8d2;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 18px;
+      }
+
+      .band h1,
+      .band h2 {
+        margin: 0 0 12px;
+      }
+
+      .muted {
+        color: #5a5a52;
+        font-size: 14px;
+      }
+
+      .cloud {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 14px;
+        align-items: baseline;
+        min-height: 180px;
+      }
+
+      .image-wrap {
+        margin-bottom: 18px;
+      }
+
+      .wordcloud-image {
+        display: block;
+        width: 100%;
+        max-width: 960px;
+        height: auto;
+        border: 1px solid #d8d8d2;
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .cloud span {
+        display: inline-block;
+        line-height: 1;
+        color: #0f5d44;
+      }
+
+      .lists {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 18px;
+      }
+
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .table th,
+      .table td {
+        text-align: left;
+        padding: 8px 0;
+        border-bottom: 1px solid #ecece6;
+      }
+
+      .bar-cell {
+        width: 100%;
+      }
+
+      .bar-wrap {
+        height: 8px;
+        background: #ecece6;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .bar {
+        height: 100%;
+        background: #0f8a63;
+      }
+
+      .status {
+        min-height: 20px;
+        font-size: 14px;
+      }
+
+      .error {
+        color: #9f1c22;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <nav class="nav" aria-label="Primary">
+        <a href="/">Predictions</a>
+        <a href="/clean-nufi">Clean Nufi</a>
+        <a href="/stats">Word stats</a>
+      </nav>
+
+      <section class="band">
+        <h1>Word stats</h1>
+        <p class="muted">Corpus frequency, unique words, and a live word cloud from the loaded training data.</p>
+        <p id="status" class="status" aria-live="polite"></p>
+      </section>
+
+      <section id="summary" class="summary" aria-label="Summary stats"></section>
+
+      <section class="band">
+        <h2>Word cloud</h2>
+        <div class="image-wrap">
+          <img
+            class="wordcloud-image"
+            src="/api/stats/wordcloud-image"
+            alt="Generated word cloud from the Nufi corpus"
+            loading="lazy"
+          />
+        </div>
+        <div id="cloud" class="cloud" aria-label="Word cloud"></div>
+      </section>
+
+      <section class="lists">
+        <section class="band">
+          <h2>Top alpha words</h2>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Word</th>
+                <th>Count</th>
+                <th class="bar-cell">Share</th>
+              </tr>
+            </thead>
+            <tbody id="top-alpha-body"></tbody>
+          </table>
+        </section>
+
+        <section class="band">
+          <h2>Top tokens</h2>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Token</th>
+                <th>Count</th>
+                <th class="bar-cell">Share</th>
+              </tr>
+            </thead>
+            <tbody id="top-all-body"></tbody>
+          </table>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="/static/stats.js"></script>
+  </body>
+</html>

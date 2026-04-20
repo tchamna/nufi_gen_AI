@@ -3,4 +3,5 @@ uvicorn
 boto3
 python-dotenv
 python-docx
+python-multipart
 requests

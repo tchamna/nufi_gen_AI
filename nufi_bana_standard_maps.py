@@ -34,11 +34,15 @@ dict_bana_to_standard = {
 
 # One-character ɛ tone → a tone (Latin epsilon ɛ U+025B, not Greek ε)
 dict_bana_to_standard_one_chr = {
-    "ɛ̀": "à",
+    "ɛ̀": "a",
     "ɛ́": "á",
     "ɛ̄": "ā",
     "ɛ̌": "ǎ",
     "ɛ̂": "â",
+    # Greek epsilon variants used in some Bana sources → normalize to standard
+    "έ": "á",
+    "έ": "á",
+    "ε": "a",
 }
 
 dict_bana_to_standard_two_chr = {

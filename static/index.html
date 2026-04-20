@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Nufi N-gram Demo</title>
+    <title>Nufī N-gram Demo</title>
     <style>
       :root {
         color-scheme: light;
@@ -24,6 +24,22 @@
         border: 1px solid #d8d8d2;
         border-radius: 10px;
         padding: 16px 18px;
+      }
+
+      .nav {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+
+      .nav a {
+        color: #0f5d44;
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      .nav a:hover {
+        text-decoration: underline;
       }
 
       label[for="seed"] {
@@ -161,6 +177,11 @@
   </head>
   <body>
     <main class="panel">
+      <nav class="nav" aria-label="Primary">
+        <a href="/">Predictions</a>
+        <a href="/clean-nufi">Clean Nufi</a>
+        <a href="/stats">Word stats</a>
+      </nav>
       <label for="seed">Seed text</label>
       <textarea id="seed" spellcheck="false" aria-label="Seed text"></textarea>
 
@@ -173,7 +194,7 @@
         <label for="audioToggle">Play audio on suggestion click</label>
       </div>
       <p class="clafrica-hint" id="clafrica-hint" hidden>
-        Type Latin shortcuts (e.g. <code>af</code>, <code>eu</code>); text is mapped to Nufi characters as you type.
+        Type Latin shortcuts (e.g. <code>af</code>, <code>eu</code>); text is mapped to Nufī characters as you type.
         Turning this on also finalizes any unfinished shortcuts in the box.
       </p>
       <p class="audio-status" id="audio-status" aria-live="polite"></p>

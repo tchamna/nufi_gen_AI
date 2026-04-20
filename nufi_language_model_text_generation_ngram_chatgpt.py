@@ -72,12 +72,8 @@ base_dir = os.getcwd()
 folder_path = r"G:\My Drive\Data_Science\DataSets\Nufi\Nufi_Documents\Nufi_Only"
 output_file = "main_file1.txt"
 
+# Combine .docx files found anywhere under the dataset folder (including subfolders)
 from_many_documents_to_text(folder_path, output_file)
-
-import os
-
-# folder_path = '/path/to/folder'  # Specify the folder path where the text files are located
-# output_file = '/path/to/output.txt'  # Specify the path and name for the output file
 
 def combine_text_files(folder_path, output_file, encoding='utf-8-sig'):
     if not os.path.isdir(folder_path):
@@ -85,11 +81,12 @@ def combine_text_files(folder_path, output_file, encoding='utf-8-sig'):
         return
 
     with open(output_file, 'a', encoding=encoding) as output:
-        for file_name in os.listdir(folder_path):
-            if file_name.endswith('.txt'):
-                file_path = os.path.join(folder_path, file_name)
-                with open(file_path, 'r', encoding=encoding, errors='ignore') as file:
-                    output.write(file.read() + '\n')
+        for root, _, files in os.walk(folder_path):
+            for file_name in files:
+                if file_name.endswith('.txt'):
+                    file_path = os.path.join(root, file_name)
+                    with open(file_path, 'r', encoding=encoding, errors='ignore') as file:
+                        output.write(file.read() + '\n')
 
 
 directory = folder_path

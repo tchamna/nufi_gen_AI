@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 
 from fastapi.testclient import TestClient
+from docx import Document
 
 import app
 import nufi_model as nm
@@ -258,3 +260,116 @@ def test_s3_audio_headers_normalize_last_modified_to_utc():
 
     assert headers["Cache-Control"] == "public, max-age=2592000, stale-while-revalidate=86400"
     assert headers["Last-Modified"] == "Sat, 18 Apr 2026 13:30:00 GMT"
+
+
+def test_lexical_stats_endpoint_returns_summary(monkeypatch):
+    _stub_runtime(monkeypatch)
+    monkeypatch.setattr(
+        app.tlr,
+        "build_lexical_report_data",
+        lambda sentence_sources: {
+            "total_tokens": 120,
+            "total_alpha_tokens": 100,
+            "unique_words": ["mɑ́", "kɑ́"],
+            "unique_alpha_words": ["mɑ́", "kɑ́"],
+            "top_words": ["mɑ́\t40", "001\t20"],
+            "top_alpha_words": ["mɑ́\t40", "kɑ́\t30"],
+            "top_alpha_preview": ["mɑ́\t40", "kɑ́\t30"],
+        },
+    )
+
+    with TestClient(app.app) as client:
+        response = client.get("/api/stats/lexical")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_tokens"] == 120
+    assert payload["unique_word_count"] == 2
+    assert payload["wordcloud_image_url"] == "/api/stats/wordcloud-image"
+    assert payload["top_alpha_words"][0] == {"word": "mɑ́", "count": 40}
+    assert payload["top_words"][1] == {"word": "001", "count": 20}
+
+
+def test_stats_page_route_serves_html(monkeypatch):
+    _stub_runtime(monkeypatch)
+
+    with TestClient(app.app) as client:
+        response = client.get("/stats")
+
+    assert response.status_code == 200
+    assert "Word stats" in response.text
+    assert "/api/stats/wordcloud-image" in response.text
+
+
+def test_clean_nufi_text_endpoint_applies_bana_and_ton_bas(monkeypatch):
+    _stub_runtime(monkeypatch)
+
+    with TestClient(app.app) as client:
+        response = client.post("/api/clean-nufi/text", json={"text": "sì hə̌ʼnzī"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["cleaned_text"] == "si hě'nzī"
+
+
+def test_clean_nufi_file_endpoint_returns_cleaned_txt_download(monkeypatch):
+    _stub_runtime(monkeypatch)
+
+    with TestClient(app.app) as client:
+        response = client.post(
+            "/api/clean-nufi/file",
+            files={"file": ("sample.txt", "sì hə̌ʼnzī".encode("utf-8"), "text/plain")},
+        )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert 'filename="sample_clean_nufi.txt"' in response.headers["content-disposition"]
+    assert response.content.decode("utf-8-sig") == "si hě'nzī"
+
+
+def test_clean_nufi_file_endpoint_accepts_docx(monkeypatch):
+    _stub_runtime(monkeypatch)
+    buffer = BytesIO()
+    document = Document()
+    document.add_paragraph("sì hə̌ʼnzī")
+    document.save(buffer)
+
+    with TestClient(app.app) as client:
+        response = client.post(
+            "/api/clean-nufi/file",
+            files={
+                "file": (
+                    "sample.docx",
+                    buffer.getvalue(),
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                )
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.content.decode("utf-8-sig") == "si hě'nzī"
+
+
+def test_clean_nufi_page_route_serves_html(monkeypatch):
+    _stub_runtime(monkeypatch)
+
+    with TestClient(app.app) as client:
+        response = client.get("/clean-nufi")
+
+    assert response.status_code == 200
+    assert "Clean Nufi" in response.text
+    assert "Drop a" in response.text
+
+
+def test_wordcloud_image_route_serves_png(monkeypatch, tmp_path):
+    _stub_runtime(monkeypatch)
+    image_path = tmp_path / "nufi_wordcloud_real.png"
+    image_path.write_bytes(b"\x89PNG\r\n\x1a\nfake")
+    monkeypatch.setattr(app, "_resolve_wordcloud_image_path", lambda: image_path)
+
+    with TestClient(app.app) as client:
+        response = client.get("/api/stats/wordcloud-image")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.content.startswith(b"\x89PNG")

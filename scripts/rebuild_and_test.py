@@ -1,5 +1,9 @@
 import os
 import nufi_model as nm
+import sys
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 base_dir = os.getcwd()
 print('base_dir=', base_dir)

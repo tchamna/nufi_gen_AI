@@ -1,14 +1,18 @@
 import os
+import re
 import sys
 from contextlib import asynccontextmanager
 from datetime import timezone
 from email.utils import format_datetime
+from io import BytesIO
 from pathlib import Path
+import unicodedata
 
 BASE_DIR = Path(__file__).resolve().parent
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.responses import HTMLResponse
 from fastapi.responses import RedirectResponse
 from fastapi.responses import Response
@@ -16,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 import requests
 import uvicorn
+from nufi_bana_classification import normalize_bana_to_standard, normalize_ton_bas
 try:
     import boto3
     from botocore.exceptions import BotoCoreError
@@ -33,6 +38,7 @@ except ImportError:  # pragma: no cover - optional dependency for local dev conv
 
 import nufi_audio as na
 import nufi_model as nm
+from scripts import generate_training_lexical_reports as tlr
 
 if load_dotenv is not None:
     load_dotenv(BASE_DIR / ".env")
@@ -97,7 +103,12 @@ class KeyboardSuggestRequest(BaseModel):
     limit: int = Field(default=5, ge=1, le=8)
 
 
+class CleanNufiTextRequest(BaseModel):
+    text: str = ""
+
+
 MODEL_PATH = BASE_DIR / "data" / "Nufi" / "Nufi_language_model_api.pickle"
+_CLEAN_NUFI_ALLOWED_FILE_EXTENSIONS = {".txt", ".docx"}
 
 
 def _corpus_sources():
@@ -230,6 +241,61 @@ def _s3_audio_headers(response: dict) -> dict[str, str]:
     return headers
 
 
+def _resolve_wordcloud_image_path() -> Path | None:
+    candidates = [
+        BASE_DIR / "data" / "nufi_wordcloud_real.png",
+        BASE_DIR / "data" / "_nufi_wordcloud_real.png",
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
+    return None
+
+
+def _clean_nufi_text(text: str) -> str:
+    normalized = nm.normalize_text(text or "")
+    normalized = normalize_bana_to_standard(normalized)
+    normalized = normalize_ton_bas(normalized)
+    return unicodedata.normalize("NFC", normalized)
+
+
+def _safe_download_stem(filename: str | None) -> str:
+    raw_stem = Path(filename or "cleaned").stem or "cleaned"
+    normalized = unicodedata.normalize("NFKD", raw_stem).encode("ascii", "ignore").decode("ascii")
+    sanitized = re.sub(r"[^A-Za-z0-9._-]+", "_", normalized).strip("._-")
+    return sanitized or "cleaned"
+
+
+def _cleaned_download_name(filename: str | None) -> str:
+    return f"{_safe_download_stem(filename)}_clean_nufi.txt"
+
+
+def _decode_uploaded_text(raw_bytes: bytes) -> str:
+    for encoding in ("utf-8-sig", "utf-8", "latin1"):
+        try:
+            return raw_bytes.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return raw_bytes.decode("utf-8", errors="ignore")
+
+
+def _extract_upload_text(filename: str | None, raw_bytes: bytes) -> str:
+    extension = Path(filename or "").suffix.lower()
+    if extension in {"", ".txt"}:
+        return _decode_uploaded_text(raw_bytes)
+    if extension == ".docx":
+        try:
+            from docx import Document
+        except ImportError as exc:
+            raise HTTPException(status_code=500, detail="docx support unavailable") from exc
+
+        document = Document(BytesIO(raw_bytes))
+        return "\n".join(paragraph.text for paragraph in document.paragraphs)
+
+    allowed = ", ".join(sorted(_CLEAN_NUFI_ALLOWED_FILE_EXTENSIONS))
+    raise HTTPException(status_code=400, detail=f"unsupported file type; use {allowed}")
+
+
 def _is_not_found_s3_error(exc: Exception) -> bool:
     if not isinstance(exc, ClientError):
         return False
@@ -238,7 +304,7 @@ def _is_not_found_s3_error(exc: Exception) -> bool:
 
 
 def load_runtime_state():
-    global CLEANED, CLEANED_SET, TOKENS, MODEL, SENTENCE_SOURCES
+    global CLEANED, CLEANED_SET, TOKENS, MODEL, SENTENCE_SOURCES, LEXICAL_STATS
     _startup_log("Loading and cleaning corpus (large files may take a few minutes)...")
     bundle = nm.load_corpus_bundle(BASE_DIR)
     CLEANED = bundle["cleaned"]
@@ -247,6 +313,7 @@ def load_runtime_state():
     CLEANED_SET = set(CLEANED)
     _startup_log(f"Corpus: {len(CLEANED)} sentences, {sum(len(t) for t in TOKENS)} tokens.")
     MODEL = _load_api_model(TOKENS)
+    LEXICAL_STATS = tlr.build_lexical_report_data(SENTENCE_SOURCES)
     _startup_log("Ready.")
 
 
@@ -256,7 +323,7 @@ async def lifespan(_app):
     yield
 
 
-app = FastAPI(title="Nufi N-gram API", lifespan=lifespan)
+app = FastAPI(title="Nufī N-gram API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -359,6 +426,29 @@ def api_keyboard_suggest(req: KeyboardSuggestRequest):
     }
 
 
+@app.post("/api/clean-nufi/text")
+def api_clean_nufi_text(req: CleanNufiTextRequest):
+    return {
+        "input_text": req.text,
+        "cleaned_text": _clean_nufi_text(req.text),
+    }
+
+
+@app.post("/api/clean-nufi/file")
+async def api_clean_nufi_file(file: UploadFile = File(...)):
+    raw_bytes = await file.read()
+    source_text = _extract_upload_text(file.filename, raw_bytes)
+    cleaned_text = _clean_nufi_text(source_text)
+    headers = {
+        "Content-Disposition": f'attachment; filename="{_cleaned_download_name(file.filename)}"',
+    }
+    return Response(
+        content=cleaned_text.encode("utf-8-sig"),
+        media_type="text/plain; charset=utf-8",
+        headers=headers,
+    )
+
+
 @app.head("/api/audio/{word:path}")
 def api_audio_head(word: str, audio_id: str | None = None):
     audio_filename = _resolve_audio_filename(word, audio_id=audio_id)
@@ -409,12 +499,65 @@ def api_audio_get(word: str, audio_id: str | None = None):
     )
 
 
+@app.get("/api/stats/lexical")
+def api_stats_lexical():
+    top_words = []
+    for item in LEXICAL_STATS["top_words"]:
+        word, count = str(item).split("\t", 1)
+        top_words.append({"word": word, "count": int(count)})
+
+    top_alpha_words = []
+    for item in LEXICAL_STATS["top_alpha_words"]:
+        word, count = str(item).split("\t", 1)
+        top_alpha_words.append({"word": word, "count": int(count)})
+
+    preview_words = []
+    for item in LEXICAL_STATS["top_alpha_preview"]:
+        word, count = str(item).split("\t", 1)
+        preview_words.append({"word": word, "count": int(count)})
+
+    return {
+        "total_tokens": LEXICAL_STATS["total_tokens"],
+        "total_alpha_tokens": LEXICAL_STATS["total_alpha_tokens"],
+        "unique_word_count": len(LEXICAL_STATS["unique_words"]),
+        "unique_alpha_word_count": len(LEXICAL_STATS["unique_alpha_words"]),
+        "wordcloud_image_url": "/api/stats/wordcloud-image",
+        "top_words": top_words,
+        "top_alpha_words": top_alpha_words,
+        "top_alpha_preview": preview_words,
+    }
+
+
+@app.get("/api/stats/wordcloud-image")
+def api_stats_wordcloud_image():
+    image_path = _resolve_wordcloud_image_path()
+    if image_path is None:
+        raise HTTPException(status_code=404, detail="word cloud image not found")
+    return FileResponse(image_path, media_type="image/png")
+
+
 @app.get("/")
 def index():
     html_path = BASE_DIR / "static" / "index.html"
     if html_path.exists():
         return HTMLResponse(html_path.read_text(encoding="utf-8"))
     return {"status": "ok", "message": "Put a static/index.html file to serve the frontend."}
+
+
+@app.get("/stats")
+def stats_page():
+    html_path = BASE_DIR / "static" / "stats.html"
+    if html_path.exists():
+        return HTMLResponse(html_path.read_text(encoding="utf-8"))
+    raise HTTPException(status_code=404, detail="stats page not found")
+
+
+@app.get("/clean-nufi")
+def clean_nufi_page():
+    html_path = BASE_DIR / "static" / "clean-nufi.html"
+    if html_path.exists():
+        return HTMLResponse(html_path.read_text(encoding="utf-8"))
+    raise HTTPException(status_code=404, detail="clean nufi page not found")
 
 
 if __name__ == "__main__":

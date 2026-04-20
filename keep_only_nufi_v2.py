@@ -511,7 +511,7 @@ class LanguageSegmenter:
         decisive_margin: float = 0.55,
         english_wordlist_path: str | None = None,
     ):
-        print("Loading Nufī lexicon...")
+        print("Loading Nufi lexicon...")
         self.nufi_lexicon = load_nufi_lexicon(lexicon_path)
         print("Loading English/French frequency dictionaries...")
         # Prefer a local strict English dictionary file if provided or present in cwd
@@ -537,7 +537,7 @@ class LanguageSegmenter:
         self.french_stems = {self.french_stemmer.stem(word) for word in self.french_words if word.isalpha()}
         self.foreign_score_threshold = foreign_score_threshold
         self.decisive_margin = decisive_margin
-        print(f"Loaded {len(self.nufi_lexicon)} Nufī lexicon entries")
+        print(f"Loaded {len(self.nufi_lexicon)} Nufi lexicon entries")
         print(f"Loaded {len(self.english_words)} English words")
         print(f"Loaded {len(self.french_words)} French words")
 

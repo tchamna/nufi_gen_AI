@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Clean Nufi</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: system-ui, Segoe UI, Arial, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        padding: 16px;
+        background: #f5f5f2;
+        color: #161616;
+      }
+
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+
+      .nav {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+
+      .nav a {
+        color: #0f5d44;
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      .nav a:hover {
+        text-decoration: underline;
+      }
+
+      .band {
+        background: #fff;
+        border: 1px solid #d8d8d2;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 18px;
+      }
+
+      .band h1,
+      .band h2,
+      .band p {
+        margin-top: 0;
+      }
+
+      .split {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 18px;
+      }
+
+      textarea,
+      input,
+      button {
+        font: inherit;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 260px;
+        box-sizing: border-box;
+        resize: vertical;
+        border: 1px solid #b9b9b0;
+        border-radius: 8px;
+        padding: 10px 12px;
+      }
+
+      textarea[readonly] {
+        background: #fafaf7;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      button {
+        border: 1px solid #0f5d44;
+        border-radius: 8px;
+        padding: 10px 16px;
+        background: #0f8a63;
+        color: #fff;
+        cursor: pointer;
+      }
+
+      button.secondary {
+        border-color: #90908a;
+        background: #fff;
+        color: #161616;
+      }
+
+      button:disabled {
+        opacity: 0.65;
+        cursor: wait;
+      }
+
+      .dropzone {
+        border: 2px dashed #9ecab8;
+        border-radius: 8px;
+        padding: 20px;
+        background: #f7fbf8;
+        text-align: center;
+      }
+
+      .dropzone.dragover {
+        border-color: #0f8a63;
+        background: #eef7f2;
+      }
+
+      .hint,
+      .status {
+        color: #5a5a52;
+        font-size: 14px;
+      }
+
+      .error {
+        color: #9f1c22;
+      }
+
+      .file-meta {
+        margin-top: 10px;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <nav class="nav" aria-label="Primary">
+        <a href="/">Predictions</a>
+        <a href="/clean-nufi">Clean Nufi</a>
+        <a href="/stats">Word stats</a>
+      </nav>
+
+      <section class="band">
+        <h1>Clean Nufi</h1>
+        <p>Apply Bana mapping and ton bas cleanup to text, then copy or download the cleaned result.</p>
+      </section>
+
+      <section class="band">
+        <h2>Text cleanup</h2>
+        <div class="split">
+          <section>
+            <label for="sourceText">Input text</label>
+            <textarea id="sourceText" spellcheck="false" aria-label="Input text"></textarea>
+          </section>
+          <section>
+            <label for="cleanedText">Cleaned text</label>
+            <textarea id="cleanedText" spellcheck="false" aria-label="Cleaned text" readonly></textarea>
+          </section>
+        </div>
+        <div class="toolbar">
+          <button id="cleanTextButton" type="button">Clean Nufi</button>
+          <button id="copyTextButton" class="secondary" type="button">Copy cleaned text</button>
+          <button id="downloadTextButton" class="secondary" type="button">Download cleaned text</button>
+          <button id="clearTextButton" class="secondary" type="button">Clear</button>
+        </div>
+        <p id="textStatus" class="status" aria-live="polite"></p>
+      </section>
+
+      <section class="band">
+        <h2>File cleanup</h2>
+        <div id="dropzone" class="dropzone" tabindex="0">
+          <p>Drop a <code>.txt</code> or <code>.docx</code> file here.</p>
+          <p>Or choose a file and download the cleaned text.</p>
+          <div class="toolbar" style="justify-content:center">
+            <input id="fileInput" type="file" accept=".txt,.docx,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+            <button id="cleanFileButton" type="button">Clean file</button>
+          </div>
+        </div>
+        <p class="hint">The downloaded result is always a UTF-8 text file.</p>
+        <p id="fileMeta" class="file-meta"></p>
+        <p id="fileStatus" class="status" aria-live="polite"></p>
+      </section>
+    </main>
+
+    <script type="module" src="/static/clean-nufi.js"></script>
+  </body>
+</html>

@@ -723,7 +723,7 @@ export default function App() {
         if (resolved?.ambiguous && resolved.candidates.length > 1) {
           setResolveChoices(resolved.candidates);
           setResolvePrompt(
-            `Plusieurs verbes correspondent à « ${v} ». Choisissez le verbe nufi à conjuguer.`
+            `Plusieurs verbes correspondent à « ${v} ». Choisissez le verbe Nufī à conjuguer.`
           );
           return;
         }
@@ -959,7 +959,7 @@ export default function App() {
                   title="Masquer seulement le ton bas dans les résultats affichés."
                 >
                   <span className="clafrica-switch-label" id="strip-tones-switch-label">
-                    Nufi Clean
+                    Nufī Clean
                   </span>
                   <button
                     type="button"
@@ -978,10 +978,10 @@ export default function App() {
 
                 <div
                   className="clafrica-switch-row"
-                  title="Afficher les en-têtes des tableaux en nufi."
+                  title="Afficher les en-têtes des tableaux en Nufī."
                 >
                   <span className="clafrica-switch-label" id="nufi-headers-switch-label">
-                    Nufi Headers
+                    Nufī Headers
                   </span>
                   <button
                     type="button"
@@ -1042,7 +1042,7 @@ export default function App() {
               {clafricaEnabled ? (
                 <div
                   className="clafrica-insert-palette-wrap"
-                  aria-label="Insert Nufi characters"
+                  aria-label="Insert Nufī characters"
                 >
                   <p className="clafrica-insert-palette-hint">
                     Tap a character to insert at the cursor (shortcuts like af, eu still apply).
@@ -1154,7 +1154,7 @@ export default function App() {
             </button>
           </div>
           {clafricaEnabled ? (
-            <div className="clafrica-insert-palette-wrap" aria-label="Insert Nufi characters">
+            <div className="clafrica-insert-palette-wrap" aria-label="Insert Nufī characters">
               <p className="clafrica-insert-palette-hint">
                 Tap a character to insert at the cursor (shortcuts like af, eu still apply).
               </p>
@@ -1365,12 +1365,12 @@ export default function App() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="book-cover-link"
-                aria-label="Open the paperback listing for La grammaire des langues bamilekes : cas du nufi"
+                aria-label="Open the paperback listing for La grammaire des langues bamilekes : cas du Nufī"
               >
                 <img
                   className="book-cover"
                   src={nufiGrammarCover}
-                  alt="Cover of La grammaire des langues bamilekes : cas du nufi"
+                  alt="Cover of La grammaire des langues bamilekes : cas du Nufī"
                   loading="eager"
                   decoding="async"
                 />
@@ -1378,8 +1378,8 @@ export default function App() {
             </div>
             <div className="book-card-body">
               <h2>Reference Book</h2>
-              <p className="book-title">La grammaire des langues bamilekes : cas du nufi</p>
-              <p>Language: Nufi</p>
+              <p className="book-title">La grammaire des langues bamilekes : cas du Nufī</p>
+              <p>Language: Nufī</p>
               <p>
                 Authors:{" "}
                 <span className="author-name-highlight">Shck Tchamna</span>,{" "}
@@ -1403,18 +1403,18 @@ export default function App() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="dictionary-card-link"
-                aria-label="Open the Nufi Android dictionary on Google Play"
+                aria-label="Open the Nufī Android dictionary on Google Play"
               >
                 <img
                   className="dictionary-cover"
                   src={nufiDictionaryCover}
-                  alt="Nufi Android dictionary on Google Play"
+                  alt="Nufī Android dictionary on Google Play"
                   loading="eager"
                   decoding="async"
                 />
                 <div className="dictionary-card-copy">
                   <span className="dictionary-card-eyebrow">Android Dictionary</span>
-                  <strong>Nufi Dictionary</strong>
+                  <strong>Nufī Dictionary</strong>
                   <span>Ouvrir sur Google Play</span>
                 </div>
               </a>

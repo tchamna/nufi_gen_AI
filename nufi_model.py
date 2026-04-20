@@ -4,6 +4,7 @@ import pickle
 import random
 import re
 import unicodedata
+from functools import lru_cache
 
 from nufi_bana_classification import normalize_bana_to_standard, normalize_ton_bas
 from nufi_bana_standard_maps import dict_ton_bas
@@ -112,7 +113,9 @@ def _tokens_assume_low_tone_bare_vowels(tokens: list[str]) -> tuple[list[str], b
 DEFAULT_MAX_TOKENS = 40
 DEFAULT_NUM_CANDIDATES = 5
 DEFAULT_TEMPERATURE = 1.0
+EXTERNAL_NUFI_DOCUMENTS_DIR = r"G:\My Drive\Data_Science\DataSets\Nufi\Nufi_Documents"
 EXTERNAL_NUFI_ONLY_DIR = r"G:\My Drive\Data_Science\DataSets\Nufi\Nufi_Documents\Nufi_Only"
+EXTERNAL_NUFI_FRANCAIS_DIR = r"G:\My Drive\Data_Science\DataSets\Nufi\Nufi_Documents\Nufi_Francais"
 
 # Dictionary / gloss lines in vocabulary sources (French meta text, not Nufi).
 _FRENCH_META_SUBSTRINGS = (
@@ -252,7 +255,10 @@ def _read_records_from_docx(path):
         return []
 
     records = []
-    document = Document(path)
+    try:
+        document = Document(path)
+    except Exception:
+        return []
     for paragraph_number, paragraph in enumerate(document.paragraphs, start=1):
         if paragraph.text.strip():
             records.append(_make_source_record(paragraph.text, path, "docx", f"paragraph {paragraph_number}"))
@@ -288,6 +294,20 @@ def _read_records_from_srt(path):
     return records
 
 
+@lru_cache(maxsize=1)
+def _get_keep_only_nufi_segmenter():
+    from keep_only_nufi_v2 import LanguageSegmenter
+
+    return LanguageSegmenter()
+
+
+def _keep_only_nufi_text(text: str) -> str:
+    if not text:
+        return ""
+    cleaned = _get_keep_only_nufi_segmenter().keep_only_nufi_text(text)
+    return cleaned.strip()
+
+
 def _read_records_from_supported_file(path):
     lower_path = path.lower()
     if lower_path.endswith(".txt"):
@@ -306,8 +326,22 @@ def _load_directory_records(folder_path):
     records = []
     for root, _, file_names in os.walk(folder_path):
         for file_name in file_names:
+            if file_name.startswith("~$"):
+                continue
             path = os.path.join(root, file_name)
             records.extend(_read_records_from_supported_file(path))
+    return records
+
+
+def _load_filtered_directory_records(folder_path):
+    records = []
+    for record in _load_directory_records(folder_path):
+        filtered_text = _keep_only_nufi_text(record["text"])
+        if not filtered_text:
+            continue
+        filtered_record = dict(record)
+        filtered_record["text"] = filtered_text
+        records.append(filtered_record)
     return records
 
 
@@ -347,9 +381,12 @@ def load_corpus_bundle(base_dir=None):
             if os.path.exists(path):
                 records.extend(_read_records_from_text_file(path, source_type="txt", encoding="utf-8"))
 
-    local_nufi_docs_dir = os.path.join(base_dir, "data", "Nufi_Documents", "Nufi_Only")
-    records.extend(_load_directory_records(local_nufi_docs_dir))
-    records.extend(_load_directory_records(EXTERNAL_NUFI_ONLY_DIR))
+    local_nufi_only_dir = os.path.join(base_dir, "data", "Nufi_Documents", "Nufi_Only")
+    local_nufi_francais_dir = os.path.join(base_dir, "data", "Nufi_Documents", "Nufi_Francais")
+    records.extend(_load_filtered_directory_records(local_nufi_only_dir))
+    records.extend(_load_filtered_directory_records(local_nufi_francais_dir))
+    records.extend(_load_filtered_directory_records(EXTERNAL_NUFI_ONLY_DIR))
+    records.extend(_load_filtered_directory_records(EXTERNAL_NUFI_FRANCAIS_DIR))
 
     sentence_sources = {}
     cleaned_sentences = []
