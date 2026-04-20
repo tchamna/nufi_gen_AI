@@ -31,8 +31,10 @@ The uploaded artifact contains:
 
 Create these GitHub Actions settings:
 
-- repository variable: `AZURE_WEBAPP_NAME`
-- repository secret: `AZURE_WEBAPP_PUBLISH_PROFILE`
+- `AZURE_WEBAPP_NAME`: App Service name, as either a **repository variable** or a **repository secret** (both are supported)
+- repository secret: `AZURE_CREDENTIALS` — JSON for a service principal that can deploy to that app (for example the output of `az ad sp create-for-rbac --name "<name>" --role contributor --scopes /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Web/sites/<app> --sdk-auth`)
+
+The workflow runs `azure/login` with that secret, then `azure/webapps-deploy` without a publish profile.
 
 If `AZURE_WEBAPP_NAME` is not set, the deploy step is skipped and CI still passes.
 

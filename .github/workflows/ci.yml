@@ -73,23 +73,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Validate Azure deploy configuration
-        if: ${{ vars.AZURE_WEBAPP_NAME != '' }}
+      - name: Validate Azure deploy configuration (basic)
+        if: ${{ (vars.AZURE_WEBAPP_NAME || secrets.AZURE_WEBAPP_NAME) == '' }}
         run: |
-          test -n "${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}" || {
-            echo "AZURE_WEBAPP_PUBLISH_PROFILE is not set";
-            exit 1;
-          }
+          echo "Set repository variable or secret AZURE_WEBAPP_NAME to enable deploy. See docs/github-actions.md"
 
-      - name: Deploy to Azure Web App
-        if: ${{ vars.AZURE_WEBAPP_NAME != '' }}
+      - name: Azure Login (service principal)
+        if: ${{ secrets.AZURE_CREDENTIALS != '' }}
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Azure Web App (service principal)
+        if: ${{ (vars.AZURE_WEBAPP_NAME || secrets.AZURE_WEBAPP_NAME) != '' && secrets.AZURE_CREDENTIALS != '' }}
         uses: azure/webapps-deploy@v3
         with:
-          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          app-name: ${{ vars.AZURE_WEBAPP_NAME || secrets.AZURE_WEBAPP_NAME }}
           package: .
 
-      - name: Skip Azure (no AZURE_WEBAPP_NAME)
-        if: ${{ vars.AZURE_WEBAPP_NAME == '' }}
-        run: echo "Set repository variable AZURE_WEBAPP_NAME to enable deploy. See docs/github-actions.md"
+      - name: Skip Azure (no service principal configured)
+        if: ${{ (vars.AZURE_WEBAPP_NAME || secrets.AZURE_WEBAPP_NAME) != '' && secrets.AZURE_CREDENTIALS == '' }}
+        run: |
+          echo "AZURE_WEBAPP_NAME is set but AZURE_CREDENTIALS is missing. Add repository secret AZURE_CREDENTIALS (JSON from a service principal with deploy rights) to enable deploy. See docs/github-actions.md"
