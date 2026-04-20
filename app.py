@@ -75,6 +75,12 @@ _AUDIO_PRESIGNED_URL_TTL_SECONDS = max(
 )
 _AUDIO_TIMEOUT = (5, 30)
 _AUDIO_HTTP = requests.Session()
+    def _load_static_content(name: str) -> str | None:
+        try:
+            p = BASE_DIR / "static" / name
+            return p.read_text(encoding="utf-8")
+        except Exception:
+            return None
 _AUDIO_HTTP.headers.update({"User-Agent": "nufi-gen-ai-audio-proxy/1.0"})
 _S3_CLIENT = boto3.client("s3", region_name=AUDIO_REGION) if boto3 is not None else None
 
@@ -341,6 +347,12 @@ app.mount(
 
 
 @app.post("/api/generate")
+@app.get("/api/static/{name:path}")
+def api_static(name: str):
+    content = _load_static_content(name)
+    if content is not None:
+        return HTMLResponse(content)
+    raise HTTPException(status_code=404, detail="Static file not found")
 def api_generate(req: GenerateRequest):
     if not nm.clean_text(req.text):
         raise HTTPException(status_code=400, detail="text is required")
