@@ -37,3 +37,18 @@ Thumbs.db
 # Logs / temp
 *.log
 npm-debug.log*
+log_capture.txt
+cleaned/
+tmp_*
+main_file.unique.txt
+main_file1.txt
+main_file2.txt
+android-keyboard/tmp_*.txt
+data/nufi_top_100*.txt
+data/nufi_top_100*.png
+data/nufi_top_100*.svg
+data/nufi_unique_words*.txt
+data/nufi_wordcloud*.html
+data/nufi_wordcloud*.png
+data/nufi_wordcloud*.svg
+docs/*_latest.csv

@@ -1,0 +1,23 @@
+# Development requirements
+-r requirements.txt
+
+# Test dependencies
+pytest
+openpyxl
+
+# Data prep / corpus tooling
+pandas
+nltk
+wordfreq
+
+# Local UI / exploration tools
+gradio
+plotly
+
+# Formatting / visualization helpers
+black
+isort
+wordcloud
+matplotlib
+pillow
+fonttools

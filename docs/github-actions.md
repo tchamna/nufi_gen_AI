@@ -1,28 +1,41 @@
-# GitHub Actions (CI / CD)
+# GitHub Actions
 
-## CI
+The repo now uses one workflow: `.github/workflows/ci.yml`.
 
-On every push or pull request to `main` / `master`, **pytest** runs (`tests/`).
+## Flow
 
-## Deploy to Azure (optional)
+1. Install `requirements-dev.txt`
+2. Build the training corpus export files
+3. Build lexical reports and visuals
+4. Upload those files as a GitHub Actions artifact
+5. Run `pytest tests/ -q`
+6. If the event is a push to `main` or `master`, optionally deploy to Azure
 
-After tests pass on a push to `main` or `master`, the workflow can deploy the repo root as a zip to **Azure App Service**.
+The uploaded artifact contains:
 
-### One-time setup
+- `docs/training_corpus_unique_sentences_with_sources.txt`
+- `docs/training_corpus_unique_sentences_with_sources.csv`
+- `docs/training_corpus_unique_sentences_only.txt`
+- `docs/training_corpus_unique_sentences_only.csv`
+- `data/nufi_unique_words.txt`
+- `data/nufi_unique_words_alpha.txt`
+- `data/nufi_top_100.txt`
+- `data/nufi_top_100_no_numerics.txt`
+- `data/nufi_top_100_preview.txt`
+- `data/nufi_top_100_bar.png`
+- `data/nufi_top_100_bar.svg`
+- `data/nufi_wordcloud_real.png`
+- `data/nufi_wordcloud_real.svg`
 
-1. Create the Web App in Azure (Linux, Python 3.11+). Configure **Startup command** (see `docs/azure-deploy.md`).
-2. In GitHub: **Settings → Secrets and variables → Actions**
-   - **Variables → New repository variable**
-     - Name: `AZURE_WEBAPP_NAME`  
-     - Value: your app name only (e.g. `nufi-api`, not the full URL).
-   - **Secrets → New repository secret**
-     - Name: `AZURE_WEBAPP_PUBLISH_PROFILE`  
-     - Value: paste the full contents of the **Publish profile** file from Azure (Web App → **Get publish profile** / download `.PublishSettings` and open in a text editor).
+## Azure Deploy Setup
 
-3. Push to `main`. The **deploy-azure** job runs only if `AZURE_WEBAPP_NAME` is set; the deploy step uses the publish profile secret.
+Create these GitHub Actions settings:
 
-If you do not use Azure, leave `AZURE_WEBAPP_NAME` unset; the deploy step is skipped and CI still passes.
+- repository variable: `AZURE_WEBAPP_NAME`
+- repository secret: `AZURE_WEBAPP_PUBLISH_PROFILE`
 
-## Manual run
+If `AZURE_WEBAPP_NAME` is not set, the deploy step is skipped and CI still passes.
 
-**Actions → CI → Run workflow** to run tests (and deploy on `main` if configured).
+## Manual Run
+
+Use **Actions -> CI / Deploy -> Run workflow** to trigger the workflow manually.

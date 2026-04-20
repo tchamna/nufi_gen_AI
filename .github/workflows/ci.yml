@@ -1,4 +1,4 @@
-name: CI
+name: CI / Deploy
 
 on:
   push:
@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, master]
   workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -19,9 +23,43 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - name: Install test dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Build training corpus exports
+        run: python scripts/export_training_corpus_with_sources.py
+
+      - name: Build lexical reports
+        run: python scripts/generate_training_lexical_reports.py
+
+      - name: Build lexical visuals
+        run: |
+          python scripts/generate_real_wordcloud.py
+          python scripts/generate_top_bar_chart.py
+
+      - name: Upload training artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: training-artifacts-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            docs/training_corpus_unique_sentences_with_sources.txt
+            docs/training_corpus_unique_sentences_with_sources.csv
+            docs/training_corpus_unique_sentences_only.txt
+            docs/training_corpus_unique_sentences_only.csv
+            data/nufi_unique_words.txt
+            data/nufi_unique_words_alpha.txt
+            data/nufi_top_100.txt
+            data/nufi_top_100_no_numerics.txt
+            data/nufi_top_100_preview.txt
+            data/nufi_top_100_bar.png
+            data/nufi_top_100_bar.svg
+            data/nufi_wordcloud_real.png
+            data/nufi_wordcloud_real.svg
+          if-no-files-found: error
 
       - name: Run tests
         run: pytest tests/ -q
@@ -35,6 +73,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Validate Azure deploy configuration
+        if: ${{ vars.AZURE_WEBAPP_NAME != '' }}
+        run: |
+          test -n "${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}" || {
+            echo "AZURE_WEBAPP_PUBLISH_PROFILE is not set";
+            exit 1;
+          }
 
       - name: Deploy to Azure Web App
         if: ${{ vars.AZURE_WEBAPP_NAME != '' }}
