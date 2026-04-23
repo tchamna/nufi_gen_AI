@@ -29,6 +29,20 @@ SMS_SHORTCUT_FIXES = {
 CALENDAR_TEXT_FIXES = (
     ("Nk\u0251\u0301\u0251\u0301nt\u0113\u0113", "Nk\u0251\u0301\u0251\u0301t\u0113\u0113"),
 )
+NUFI_MONTHS = {
+    1: "Ng\u00f9'f\u012b",
+    2: "Nk\u00f9\u0251\u0300n\u0289\u0300\u0251\u0300",
+    3: "Mb\u00e0kng\u00f2f\u0101t",
+    4: "S\u00f2'nj\u0251\u0300\u0251\u0300",
+    5: "Njw\u0113n\u0251\u030chnt\u00e0'",
+    6: "M\u00f2m\u00f2sh\u0289\u0304",
+    7: "Nt\u016bmbh\u00ecng\u00f2f\u0101t",
+    8: "M\u0251\u0304ng\u00e0'nsh\u00ec",
+    9: "K\u00f9k\u016b'",
+    10: "Nd\u0289\u030c'nz\u0251\u0304",
+    11: "Nkh\u0289\u0300\u0251\u0300n\u0289\u0300\u0251\u0300",
+    12: "Nc\u00e1tm\u0251\u0304\u014b\u016b",
+}
 
 
 def load_base_mapping() -> dict[str, str]:
@@ -173,10 +187,11 @@ def load_calendar_mapping(
 
         parsed_date = parse_calendar_date(date_text)
         canonical_date = parsed_date.strftime("%d-%m-%Y")
+        month_nufi = NUFI_MONTHS[parsed_date.month]
         output = normalize_sms_text(
             (
                 f"Zě'é mɑ́ {day_nufi} ({day_eng}), "
-                f"līē' {parsed_date.strftime('%d')}, ngu' {parsed_date.strftime('%Y')}"
+                f"līē' {parsed_date.strftime('%d')}, mɑ̄ŋū {month_nufi} ngu' {parsed_date.strftime('%Y')}"
             ),
             active_replacements,
         )
