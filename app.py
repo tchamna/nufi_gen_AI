@@ -1,8 +1,9 @@
+import json
 import os
 import re
 import sys
 from contextlib import asynccontextmanager
-from datetime import timezone
+from datetime import date, timedelta, timezone
 from email.utils import format_datetime
 from io import BytesIO
 from pathlib import Path
@@ -119,6 +120,9 @@ class CleanNufiTextRequest(BaseModel):
 
 
 MODEL_PATH = BASE_DIR / "data" / "Nufi" / "Nufi_language_model_api.pickle"
+NUFI_CALENDAR_PATH = (
+    BASE_DIR / "android-keyboard" / "app" / "src" / "main" / "assets" / "nufi_calendar.json"
+)
 _CLEAN_NUFI_ALLOWED_FILE_EXTENSIONS = {".txt", ".docx"}
 
 
@@ -315,7 +319,12 @@ def _is_not_found_s3_error(exc: Exception) -> bool:
 
 
 def load_runtime_state():
-    global CLEANED, CLEANED_SET, TOKENS, MODEL, SENTENCE_SOURCES, LEXICAL_STATS
+    global CLEANED, CLEANED_SET, TOKENS, MODEL, SENTENCE_SOURCES, LEXICAL_STATS, NUFI_CALENDAR
+    NUFI_CALENDAR = {}
+    if NUFI_CALENDAR_PATH.exists():
+        _startup_log("Loading Nufi calendar...")
+        NUFI_CALENDAR = json.loads(NUFI_CALENDAR_PATH.read_text(encoding="utf-8"))
+
     _startup_log("Loading and cleaning corpus (large files may take a few minutes)...")
     bundle = nm.load_corpus_bundle(BASE_DIR)
     CLEANED = bundle["cleaned"]
@@ -440,6 +449,29 @@ def api_keyboard_suggest(req: KeyboardSuggestRequest):
             }
             for item in payload["suggestions"]
         ],
+    }
+
+
+@app.get("/api/date/nufi")
+def api_date_nufi():
+    _default_intro = "Zě'é mɑ́"
+    today = date.today()
+
+    def _lookup(offset: int, intro: str | None = None) -> str | None:
+        d = today + timedelta(days=offset)
+        base = NUFI_CALENDAR.get(d.strftime("%d-%m-%Y"))
+        if base is None:
+            return None
+        if intro is None:
+            return base
+        if base.startswith(_default_intro + " "):
+            return intro + base[len(_default_intro):]
+        return f"{intro}, {base}"
+
+    return {
+        "yesterday": _lookup(-1, "Wāha kɑ̌'"),
+        "today": _lookup(0),
+        "tomorrow": _lookup(1, "Wāhá imbɑ̄"),
     }
 
 
