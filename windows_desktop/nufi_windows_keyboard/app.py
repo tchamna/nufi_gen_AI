@@ -88,7 +88,7 @@ def acquire_single_instance_lock() -> None:
         None,
     )
     if handle is None or handle == invalid_handle:
-        print("Nufi Windows keyboard is already running.")
+        print("Clafrica+ is already running.")
         sys.exit(0)
     globals()["_LOCK_HANDLE"] = handle
 
@@ -167,6 +167,13 @@ def get_caret_screen_point(hwnd: int | None) -> tuple[int, int] | None:
 
     point = POINT(info.rcCaret.left, info.rcCaret.bottom)
     if not USER32.ClientToScreen(ctypes.wintypes.HWND(target_hwnd), ctypes.byref(point)):
+        return None
+    return point.x, point.y
+
+
+def get_cursor_screen_point() -> tuple[int, int] | None:
+    point = POINT()
+    if not USER32.GetCursorPos(ctypes.byref(point)):
         return None
     return point.x, point.y
 
@@ -272,6 +279,7 @@ class SuggestionOverlay:
         self._buttons: list[tk.Button] = []
         self._on_select = on_select
         self._enabled = True
+        self._anchor_hwnd: int | None = None
 
         self._frame = tk.Frame(self.root, bg="#101216", padx=8, pady=8)
         self._frame.pack(fill="both", expand=True)
@@ -330,7 +338,19 @@ class SuggestionOverlay:
             elif action == "suggestions":
                 suggestions, hwnd = payload
                 self._render_suggestions(suggestions, hwnd)
+        if self.root.state() != "withdrawn":
+            self._set_position(self._anchor_hwnd)
         self.root.after(50, self._poll)
+
+    def _apply_clamped_geometry(self, x: int, y: int) -> None:
+        self.root.update_idletasks()
+        width = self.root.winfo_reqwidth()
+        height = self.root.winfo_reqheight()
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        x = max(8, min(x, screen_width - width - 8))
+        y = max(8, min(y, screen_height - height - 8))
+        self.root.geometry(f"+{x}+{y}")
 
     def _set_position(self, hwnd: int | None) -> None:
         self.root.update_idletasks()
@@ -338,10 +358,13 @@ class SuggestionOverlay:
         height = self.root.winfo_reqheight()
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
-
+        cursor = get_cursor_screen_point()
         caret = get_caret_screen_point(hwnd)
         rect = get_window_rect(hwnd)
-        if self._caret_is_usable(caret, rect):
+        if cursor is not None:
+            x = cursor[0] + 14
+            y = cursor[1] + 18
+        elif self._caret_is_usable(caret, rect):
             x = caret[0] + 14
             y = caret[1] + 12
         elif rect is None:
@@ -352,9 +375,7 @@ class SuggestionOverlay:
             x = min(left + 48, max(left + 12, right - width - 24))
             y = min(bottom - height - 24, top + 64)
 
-        x = max(8, min(x, screen_width - width - 8))
-        y = max(8, min(y, screen_height - height - 8))
-        self.root.geometry(f"+{x}+{y}")
+        self._apply_clamped_geometry(x, y)
 
     def _set_state(self, enabled: bool) -> None:
         self._enabled = enabled
@@ -362,15 +383,21 @@ class SuggestionOverlay:
         self._state.configure(bg="#2a7a41" if enabled else "#9b2d30")
 
     def _render_idle(self, hwnd: int | None = None) -> None:
+        self._anchor_hwnd = hwnd
         for button in self._buttons:
             button.destroy()
         self._buttons.clear()
         self._button_row.pack_forget()
-        self._status_var.set("Nufi keyboard ON" if self._enabled else "Nufi keyboard OFF")
+        self._status_var.set(
+            "Clafrica+ ON  |  Double-Shift (\u2191\u2191) toggles ON/OFF"
+            if self._enabled
+            else "Clafrica+ OFF  |  Double-Shift (\u2191\u2191) toggles ON/OFF"
+        )
         self._set_position(hwnd)
         self.root.deiconify()
 
     def _render_status(self, message: str) -> None:
+        self._anchor_hwnd = None
         for button in self._buttons:
             button.destroy()
         self._buttons.clear()
@@ -383,6 +410,7 @@ class SuggestionOverlay:
             self._render_idle(None)
 
     def _render_suggestions(self, suggestions: list[Suggestion], hwnd: int | None) -> None:
+        self._anchor_hwnd = hwnd
         for button in self._buttons:
             button.destroy()
         self._buttons.clear()
@@ -390,7 +418,7 @@ class SuggestionOverlay:
             self._render_idle(hwnd)
             return
         self._button_row.pack(fill="x", pady=(6, 0))
-        self._status_var.set("Suggestions  1..5 or Ctrl+Shift+1..5")
+        self._status_var.set("Suggestions  1..5  |  Double-Shift (\u2191\u2191) toggles ON/OFF")
         for index, suggestion in enumerate(suggestions, start=1):
             button = self._tk.Button(
                 self._button_row,
@@ -675,9 +703,9 @@ class GlobalNufiWindowsKeyboard:
         self.overlay.set_enabled_state(self.enabled)
         if not self.enabled:
             self._reset_state()
-            self.overlay.show_status("Nufi Windows keyboard OFF")
+            self.overlay.show_status("Clafrica+ OFF  |  Double-Shift (\u2191\u2191) toggles ON/OFF")
         else:
-            self.overlay.show_status("Nufi Windows keyboard ON")
+            self.overlay.show_status("Clafrica+ ON  |  Double-Shift (\u2191\u2191) toggles ON/OFF")
             self._schedule_suggestion_fetch()
 
     def _handle_double_shift_toggle(self, event) -> None:
@@ -772,7 +800,7 @@ class GlobalNufiWindowsKeyboard:
                 lambda idx=index: self.select_suggestion(idx),
             )
         self.overlay.set_enabled_state(True)
-        self.overlay.show_status("Nufi Windows keyboard ON")
+        self.overlay.show_status("Clafrica+ ON  |  Double-Shift (\u2191\u2191) toggles ON/OFF")
 
         watcher = threading.Thread(target=self._watch_for_quit, daemon=True)
         watcher.start()
@@ -797,7 +825,7 @@ class GlobalNufiWindowsKeyboard:
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Nufi Windows desktop keyboard")
+    parser = argparse.ArgumentParser(description="Clafrica+ Windows desktop keyboard")
     parser.add_argument(
         "--api-base-url",
         default="https://nufi-gen-ai-dug3ggdsh3fze9e5.canadacentral-01.azurewebsites.net",
