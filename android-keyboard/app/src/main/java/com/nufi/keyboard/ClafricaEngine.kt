@@ -17,10 +17,11 @@ class ClafricaEngine(context: Context) {
         val intro: String? = null,
     )
 
-    private val tokenMap: Map<String, String>
+    private val clafricaTokenMap: Map<String, String>
+    private val exactTokenMap: Map<String, String>
     private val phraseMap: Map<String, String>
     private val calendarMap: Map<String, String>
-    private val allKeysSorted: List<String>
+    private val compositionalKeysSorted: List<String>
     private val phrasePatternsSorted: List<Pair<Regex, String>>
     private val ambiguousKeys: Set<String>
     private val calendarPattern = Regex("(?<![\\p{L}\\p{N}])(\\d{1,2})([ -])(\\d{1,2})\\2(\\d{4})(?![\\p{L}\\p{N}])")
@@ -40,21 +41,26 @@ class ClafricaEngine(context: Context) {
     private val defaultCalendarIntro = "Zě'é mɑ́"
 
     init {
-        val tokenEntries = LinkedHashMap<String, String>()
+        val clafricaTokenEntries = LinkedHashMap<String, String>()
+        val smsTokenEntries = LinkedHashMap<String, String>()
         val phraseEntries = LinkedHashMap<String, String>()
-        loadAssetMap(context, "clafrica.json", tokenEntries, phraseEntries)
-        loadAssetMap(context, "nufi_sms.json", tokenEntries, phraseEntries)
-        tokenMap = tokenEntries
+        loadAssetMap(context, "clafrica.json", clafricaTokenEntries, phraseEntries)
+        loadAssetMap(context, "nufi_sms.json", smsTokenEntries, phraseEntries)
+        clafricaTokenMap = clafricaTokenEntries
+        exactTokenMap = LinkedHashMap<String, String>().apply {
+            putAll(clafricaTokenEntries)
+            putAll(smsTokenEntries)
+        }
         phraseMap = phraseEntries
         calendarMap = loadJsonAsset(context, "nufi_calendar.json")
-        allKeysSorted = tokenMap.keys.sortedWith(compareBy<String> { -it.length }.thenBy { it })
+        compositionalKeysSorted = clafricaTokenMap.keys.sortedWith(compareBy<String> { -it.length }.thenBy { it })
         phrasePatternsSorted = phraseMap.keys
             .sortedWith(compareBy<String> { -it.length }.thenBy { it })
             .map { key ->
                 Regex("(?<![\\p{L}\\p{N}])${Regex.escape(key)}(?![\\p{L}\\p{N}])") to phraseMap.getValue(key)
             }
-        ambiguousKeys = allKeysSorted.filter { key ->
-            allKeysSorted.any { other -> other.length > key.length && other.startsWith(key) }
+        ambiguousKeys = compositionalKeysSorted.filter { key ->
+            compositionalKeysSorted.any { other -> other.length > key.length && other.startsWith(key) }
         }.toSet()
     }
 
@@ -165,12 +171,28 @@ class ClafricaEngine(context: Context) {
         return true
     }
 
-    private fun resolveClafricaKey(token: String): String? {
+    private fun containsNonAscii(text: String): Boolean {
+        for (ch in text) {
+            if (ch.code > 0x7f) return true
+        }
+        return false
+    }
+
+    private fun resolveExactTokenKey(token: String): String? {
         if (resolveDynamicDateValue(token) != null) return token
-        if (tokenMap.containsKey(token)) return token
+        if (exactTokenMap.containsKey(token)) return token
         if (isAsciiOnlyShortcut(token)) {
             val lower = token.lowercase(Locale.ROOT)
-            if (lower != token && tokenMap.containsKey(lower)) return lower
+            if (lower != token && exactTokenMap.containsKey(lower)) return lower
+        }
+        return null
+    }
+
+    private fun resolveComposableKey(token: String): String? {
+        if (clafricaTokenMap.containsKey(token)) return token
+        if (isAsciiOnlyShortcut(token)) {
+            val lower = token.lowercase(Locale.ROOT)
+            if (lower != token && clafricaTokenMap.containsKey(lower)) return lower
         }
         return null
     }
@@ -198,14 +220,18 @@ class ClafricaEngine(context: Context) {
     }
 
     private fun mappedValueForCanonicalKey(key: String): String? {
-        return tokenMap[key] ?: resolveDynamicDateValue(key)
+        return exactTokenMap[key] ?: resolveDynamicDateValue(key)
+    }
+
+    private fun mappedComposableValueForCanonicalKey(key: String): String? {
+        return clafricaTokenMap[key]
     }
 
     private fun applyClafricaMappingToToken(token: String): String {
         if (token.isEmpty()) return token
 
         resolveDynamicDateValue(token)?.let { return it }
-        resolveClafricaKey(token)?.let { return mappedValueForCanonicalKey(it)!! }
+        resolveExactTokenKey(token)?.let { return mappedValueForCanonicalKey(it)!! }
 
         val twoNum = Regex("^([a-zA-Z]+\\*?)([1-9])([1-9])$").matchEntire(token)
         if (twoNum != null) {
@@ -213,7 +239,7 @@ class ClafricaEngine(context: Context) {
             val num1 = twoNum.groupValues[2]
             val num2 = twoNum.groupValues[3]
             val combinedKey = "$letters$num1$num2"
-            resolveClafricaKey(combinedKey)?.let { return mappedValueForCanonicalKey(it)!! }
+            resolveExactTokenKey(combinedKey)?.let { return mappedValueForCanonicalKey(it)!! }
         }
 
         val oneNum = Regex("^([a-zA-Z]+\\*?)([1-9])$").matchEntire(token)
@@ -221,24 +247,31 @@ class ClafricaEngine(context: Context) {
             val letters = oneNum.groupValues[1]
             val num = oneNum.groupValues[2]
             val combinedKey = "$letters$num"
-            resolveClafricaKey(combinedKey)?.let { return mappedValueForCanonicalKey(it)!! }
+            resolveExactTokenKey(combinedKey)?.let { return mappedValueForCanonicalKey(it)!! }
         }
 
-        for (key in allKeysSorted) {
-            if (token == key) return tokenMap[key]!!
+        // Once a token already contains Nufi characters, do not keep applying
+        // ASCII shortcut substrings inside it. That can corrupt expanded values
+        // such as dynamic dates ("mɑ̄ŋū So'njɑɑ ...") after they are resolved.
+        if (containsNonAscii(token)) {
+            return token
+        }
+
+        for (key in compositionalKeysSorted) {
+            if (token == key) return clafricaTokenMap[key]!!
         }
 
         var result = token
         var changed = true
         while (changed) {
             changed = false
-            for (key in allKeysSorted) {
+            for (key in compositionalKeysSorted) {
                 if (key.length > result.length) continue
                 val escaped = Pattern.quote(key)
                 val probe = Pattern.compile(escaped).matcher(result)
                 if (!probe.find()) continue
 
-                val value = tokenMap[key]!!
+                val value = clafricaTokenMap[key]!!
                 val newResult = probe.replaceAll(
                     java.util.regex.Matcher.quoteReplacement(value)
                 )
@@ -259,7 +292,7 @@ class ClafricaEngine(context: Context) {
             val suffix = token.substring(index)
             val suffixLower = lowerToken.substring(index)
             val asciiSuffix = isAsciiOnlyShortcut(suffix)
-            val matches = allKeysSorted.any { key ->
+            val matches = compositionalKeysSorted.any { key ->
                 when {
                     key.startsWith(suffix) -> true
                     asciiSuffix && isAsciiOnlyShortcut(key) && key.lowercase(Locale.ROOT).startsWith(suffixLower) -> true
@@ -279,7 +312,7 @@ class ClafricaEngine(context: Context) {
         var longestSuffix: String? = null
         for (index in token.indices) {
             val suffix = token.substring(index)
-            if (resolveClafricaKey(suffix) != null) {
+            if (resolveComposableKey(suffix) != null) {
                 if (longestSuffix == null || suffix.length > longestSuffix.length) {
                     longestSuffix = suffix
                 }
@@ -292,7 +325,7 @@ class ClafricaEngine(context: Context) {
         var longestSuffix: String? = null
         for (index in token.indices) {
             val suffix = token.substring(index)
-            val canonical = resolveClafricaKey(suffix)
+            val canonical = resolveComposableKey(suffix)
             if (canonical != null && ambiguousKeys.contains(canonical)) {
                 if (longestSuffix == null || suffix.length > longestSuffix.length) {
                     longestSuffix = suffix
@@ -305,11 +338,17 @@ class ClafricaEngine(context: Context) {
     private fun applyLiveClafricaMappingToTrailingToken(token: String): String {
         if (token.isEmpty()) return token
 
+        resolveExactTokenKey(token)?.let { canonical ->
+            if (canonical !in ambiguousKeys || canonical == token) {
+                return mappedValueForCanonicalKey(canonical)!!
+            }
+        }
+
         val exactTrailingKey = getLongestTrailingExactKey(token)
-        val exactCanonical = exactTrailingKey?.let { resolveClafricaKey(it) }
+        val exactCanonical = exactTrailingKey?.let { resolveComposableKey(it) }
         if (exactTrailingKey != null && exactCanonical != null && !ambiguousKeys.contains(exactCanonical)) {
             val prefix = token.substring(0, token.length - exactTrailingKey.length)
-            return applyClafricaMappingToToken(prefix) + mappedValueForCanonicalKey(exactCanonical)!!
+            return applyClafricaMappingToToken(prefix) + mappedComposableValueForCanonicalKey(exactCanonical)!!
         }
 
         val ambiguousSuffix = getAmbiguousTrailingSuffix(token)
@@ -334,10 +373,10 @@ class ClafricaEngine(context: Context) {
         while (changed) {
             changed = false
             val exactTrailingKey = getLongestTrailingExactKey(current)
-            val exactCanonical = exactTrailingKey?.let { resolveClafricaKey(it) }
+            val exactCanonical = exactTrailingKey?.let { resolveComposableKey(it) }
             if (exactTrailingKey != null && exactCanonical != null) {
                 val prefix = current.substring(0, current.length - exactTrailingKey.length)
-                val next = applyClafricaMappingToToken(prefix) + mappedValueForCanonicalKey(exactCanonical)!!
+                val next = applyClafricaMappingToToken(prefix) + mappedComposableValueForCanonicalKey(exactCanonical)!!
                 if (next != current) {
                     current = next
                     changed = true
