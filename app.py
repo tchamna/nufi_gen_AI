@@ -609,5 +609,13 @@ def clean_nufi_page():
     raise HTTPException(status_code=404, detail="clean nufi page not found")
 
 
+@app.get("/date")
+def date_page():
+    html_path = BASE_DIR / "static" / "date.html"
+    if html_path.exists():
+        return HTMLResponse(html_path.read_text(encoding="utf-8"))
+    raise HTTPException(status_code=404, detail="date page not found")
+
+
 if __name__ == "__main__":
     uvicorn.run("app:app", host="127.0.0.1", port=APP_PORT, reload=True)

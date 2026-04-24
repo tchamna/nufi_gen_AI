@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nufī Date</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: system-ui, Segoe UI, Arial, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        padding: 16px;
+        background: #f5f5f2;
+        color: #161616;
+      }
+
+      main.panel {
+        max-width: 960px;
+        margin: 0 auto;
+        background: #fff;
+        border: 1px solid #d8d8d2;
+        border-radius: 10px;
+        padding: 16px 18px;
+      }
+
+      .nav {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+
+      .nav a {
+        color: #0f5d44;
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      .nav a:hover {
+        text-decoration: underline;
+      }
+
+      h1 {
+        font-size: 18px;
+        margin: 0 0 18px;
+      }
+
+      .date-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 14px;
+        margin-bottom: 20px;
+      }
+
+      .date-card {
+        border: 1px solid #d8d8d2;
+        border-radius: 10px;
+        padding: 14px 16px;
+        background: #f7f7f4;
+      }
+
+      .date-card.today {
+        border-color: #0f8a63;
+        background: #eef7f2;
+      }
+
+      .date-card .label {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #5a5a52;
+        margin-bottom: 8px;
+      }
+
+      .date-card.today .label {
+        color: #0f5d44;
+      }
+
+      .date-card .nufi-text {
+        font-size: 15px;
+        line-height: 1.5;
+        word-break: break-word;
+      }
+
+      .date-card .copy-btn {
+        margin-top: 10px;
+        font: inherit;
+        font-size: 13px;
+        border: 1px solid #b9b9b0;
+        border-radius: 6px;
+        padding: 5px 10px;
+        background: #fff;
+        color: #161616;
+        cursor: pointer;
+      }
+
+      .date-card .copy-btn:hover {
+        border-color: #0f8a63;
+        color: #0f5d44;
+      }
+
+      .status {
+        font-size: 13px;
+        color: #5a5a52;
+        min-height: 18px;
+      }
+
+      .status.error {
+        color: #9f1c22;
+      }
+
+      .skeleton {
+        background: linear-gradient(90deg, #e8e8e4 25%, #f0f0ec 50%, #e8e8e4 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.2s infinite;
+        border-radius: 4px;
+        height: 1em;
+        width: 80%;
+      }
+
+      @keyframes shimmer {
+        0%   { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="panel">
+      <nav class="nav" aria-label="Primary">
+        <a href="/">Predictions</a>
+        <a href="/clean-nufi">Clean Nufi</a>
+        <a href="/stats">Word stats</a>
+        <a href="/date">Date</a>
+      </nav>
+
+      <h1>Today's date in Nufī</h1>
+
+      <div class="date-grid">
+        <div class="date-card" id="card-yesterday">
+          <div class="label">Yesterday · Wāha kɑ̌'</div>
+          <div class="nufi-text"><div class="skeleton"></div></div>
+          <button class="copy-btn" type="button" hidden>Copy</button>
+        </div>
+        <div class="date-card today" id="card-today">
+          <div class="label">Today · Zě'é mɑ́</div>
+          <div class="nufi-text"><div class="skeleton"></div></div>
+          <button class="copy-btn" type="button" hidden>Copy</button>
+        </div>
+        <div class="date-card" id="card-tomorrow">
+          <div class="label">Tomorrow · Wāhá imbɑ̄</div>
+          <div class="nufi-text"><div class="skeleton"></div></div>
+          <button class="copy-btn" type="button" hidden>Copy</button>
+        </div>
+      </div>
+
+      <p class="status" id="status" aria-live="polite"></p>
+    </main>
+
+    <script>
+      async function loadDates() {
+        const status = document.getElementById('status');
+        status.textContent = '';
+        status.className = 'status';
+
+        try {
+          const res = await fetch('/api/date/nufi');
+          if (!res.ok) throw new Error(`Server error ${res.status}`);
+          const data = await res.json();
+
+          fill('card-yesterday', data.yesterday);
+          fill('card-today',     data.today);
+          fill('card-tomorrow',  data.tomorrow);
+        } catch (err) {
+          status.textContent = `Failed to load dates: ${err.message}`;
+          status.className = 'status error';
+          ['card-yesterday', 'card-today', 'card-tomorrow'].forEach(id => {
+            document.querySelector(`#${id} .nufi-text`).textContent = '—';
+          });
+        }
+      }
+
+      function fill(cardId, text) {
+        const card = document.getElementById(cardId);
+        const textEl = card.querySelector('.nufi-text');
+        const btn = card.querySelector('.copy-btn');
+        textEl.textContent = text ?? '—';
+        if (text) {
+          btn.hidden = false;
+          btn.addEventListener('click', () => {
+            navigator.clipboard.writeText(text).then(() => {
+              const orig = btn.textContent;
+              btn.textContent = 'Copied!';
+              setTimeout(() => { btn.textContent = orig; }, 1500);
+            });
+          });
+        }
+      }
+
+      loadDates();
+    </script>
+  </body>
+</html>
