@@ -62,6 +62,10 @@ class NufiTransformEngine:
             self.clafrica_token_map.keys(),
             key=lambda item: (-len(item), item),
         )
+        self.exact_keys_sorted = sorted(
+            self.exact_token_map.keys(),
+            key=lambda item: (-len(item), item),
+        )
         self.phrase_patterns_sorted = [
             (re.compile(rf"(?<![\w]){re.escape(key)}(?![\w])"), value)
             for key, value in sorted(
@@ -71,8 +75,8 @@ class NufiTransformEngine:
         ]
         self.ambiguous_keys = {
             key
-            for key in self.compositional_keys_sorted
-            if any(len(other) > len(key) and other.startswith(key) for other in self.compositional_keys_sorted)
+            for key in self.exact_keys_sorted
+            if any(len(other) > len(key) and other.startswith(key) for other in self.exact_keys_sorted)
         }
         self.ambiguous_phrase_keys = {
             key
@@ -106,7 +110,27 @@ class NufiTransformEngine:
         self.exact_token_map = dict(clafrica_tokens)
         self.exact_token_map.update(sms_tokens)
         self.phrase_map = phrases
+        self._add_optional_question_aliases()
         self.calendar_map = self._load_json_asset("nufi_calendar.json")
+
+    def _add_optional_question_aliases(self) -> None:
+        token_aliases: dict[str, str] = {}
+        for key, value in self.exact_token_map.items():
+            if not key.endswith("?"):
+                continue
+            alias = key[:-1]
+            if alias and alias not in self.exact_token_map:
+                token_aliases[alias] = value
+        self.exact_token_map.update(token_aliases)
+
+        phrase_aliases: dict[str, str] = {}
+        for key, value in self.phrase_map.items():
+            if not key.endswith("?"):
+                continue
+            alias = key[:-1]
+            if alias and alias not in self.phrase_map:
+                phrase_aliases[alias] = value
+        self.phrase_map.update(phrase_aliases)
 
     @staticmethod
     def _split_with_whitespace(text: str) -> list[str]:
@@ -288,7 +312,9 @@ class NufiTransformEngine:
             return token
 
         canonical = self._resolve_exact_token_key(token)
-        if canonical is not None and (canonical not in self.ambiguous_keys or canonical == token):
+        if canonical is not None:
+            if canonical in self.ambiguous_keys:
+                return token
             return self._mapped_value_for_canonical_key(canonical) or token
 
         exact_trailing_key = self._get_longest_trailing_exact_key(token)
@@ -381,7 +407,7 @@ class NufiTransformEngine:
         canonical = self._resolve_exact_token_key(text)
         if canonical is None:
             return None
-        if canonical in self.ambiguous_keys and canonical != text:
+        if canonical in self.ambiguous_keys:
             return None
         return self._mapped_value_for_canonical_key(canonical)
 

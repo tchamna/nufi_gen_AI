@@ -1,6 +1,17 @@
 from windows_desktop.nufi_windows_keyboard.engine import NufiTransformEngine
 
 
+FORMER_DOLLAR_SHORTCUTS = {
+    "mb'": "mbe'",
+    "mbk": "mbak",
+    "mbl": "mbə̄ə̄ lɑ́",
+    "ndnd": "ndéndēē",
+    "ngkw'": "ngɑ̌ kwa'",
+    "ppl": "pen pə̄ə̄ lɑ́",
+    "ss": "sī sīē",
+}
+
+
 def test_engine_finalizes_tone_mapping():
     engine = NufiTransformEngine()
     assert engine.finalize_input("ntoho3") == "ntohō"
@@ -14,3 +25,30 @@ def test_engine_keeps_embedded_sms_shortcut_out_of_longer_word():
 def test_engine_keeps_standalone_sms_shortcut():
     engine = NufiTransformEngine()
     assert engine.apply_mapping("6*", preserve_ambiguous_trailing_token=True) == "ntohō"
+
+
+def test_engine_finalizes_ambiguous_sms_shortcut_exact_match():
+    engine = NufiTransformEngine()
+    assert engine.finalize_input("ppl") == "pen pə̄ə̄ lɑ́"
+
+
+def test_engine_finalizes_longer_sms_shortcut_with_same_prefix():
+    engine = NufiTransformEngine()
+    assert engine.finalize_input("pplpmo") == "pen pə̄ə̄ lɑ́ poómɑ̄ ō"
+
+
+def test_engine_keeps_ambiguous_exact_shortcut_literal_while_typing():
+    engine = NufiTransformEngine()
+    assert engine.auto_complete_exact_text("ppl") is None
+    assert engine.apply_mapping("ppl", preserve_ambiguous_trailing_token=True) == "ppl"
+
+
+def test_engine_keeps_other_ambiguous_exact_shortcut_literal_while_typing():
+    engine = NufiTransformEngine()
+    assert engine.apply_mapping("mbk", preserve_ambiguous_trailing_token=True) == "mbk"
+
+
+def test_engine_finalizes_former_dollar_shortcuts_without_dollar_suffix():
+    engine = NufiTransformEngine()
+    for shortcut, expected in FORMER_DOLLAR_SHORTCUTS.items():
+        assert engine.finalize_input(shortcut) == expected

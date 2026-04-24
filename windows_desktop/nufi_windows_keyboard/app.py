@@ -9,6 +9,7 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -21,6 +22,7 @@ from .engine import NufiTransformEngine
 USER32 = ctypes.windll.user32
 MAPVK_VSC_TO_VK_EX = 3
 LOCK_PATH = str(Path(tempfile.gettempdir()) / "ClafricaPlus.lock")
+LOG_PATH = str(Path(tempfile.gettempdir()) / "ClafricaPlus.log")
 TOGGLE_WINDOW_SECONDS = 0.35
 SHIFT_KEYS = {"shift", "left shift", "right shift"}
 SHIFT_SCAN_CODES = {42, 54}
@@ -57,6 +59,7 @@ _MODIFIER_VK_CODES = (
     0x11, 0xA2, 0xA3,  # VK_CONTROL, VK_LCONTROL, VK_RCONTROL
     0x12, 0xA4, 0xA5,  # VK_MENU, VK_LMENU, VK_RMENU
 )
+_VK_CAPITAL = 0x14  # VK_CAPITAL / Caps Lock
 
 
 def acquire_single_instance_lock() -> None:
@@ -188,6 +191,13 @@ def event_to_typed_text(event) -> str | None:
         else:
             keyboard_state[_vk] &= 0x7F
 
+    # Caps Lock is a toggle key. ToUnicodeEx reads the low bit for the toggle
+    # state, so patch it from GetKeyState to avoid inverted capitalization.
+    if USER32.GetKeyState(_VK_CAPITAL) & 0x0001:
+        keyboard_state[_VK_CAPITAL] |= 0x01
+    else:
+        keyboard_state[_VK_CAPITAL] &= 0xFE
+
     virtual_key = USER32.MapVirtualKeyW(scan_code, MAPVK_VSC_TO_VK_EX)
     if not virtual_key:
         name = event.name or ""
@@ -205,7 +215,12 @@ def event_to_typed_text(event) -> str | None:
         layout,
     )
     if translated > 0:
-        return buffer.value[:translated]
+        result = buffer.value[:translated]
+        if len(result) == 1 and result.isalpha():
+            shift_down = any(USER32.GetAsyncKeyState(vk) & 0x8000 for vk in (0x10, 0xA0, 0xA1))
+            caps_on = bool(USER32.GetKeyState(_VK_CAPITAL) & 0x0001)
+            return result.upper() if (caps_on ^ shift_down) else result.lower()
+        return result
 
     name = event.name or ""
     return name if len(name) == 1 else None
@@ -253,21 +268,35 @@ class SuggestionOverlay:
         self.root.wm_attributes("-alpha", 0.96)
         self._queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self._status_var = tk.StringVar(value="")
+        self._state_var = tk.StringVar(value="ON")
         self._buttons: list[tk.Button] = []
         self._on_select = on_select
+        self._enabled = True
 
         self._frame = tk.Frame(self.root, bg="#101216", padx=8, pady=8)
         self._frame.pack(fill="both", expand=True)
+        self._header = tk.Frame(self._frame, bg="#101216")
+        self._header.pack(fill="x")
         self._status = tk.Label(
-            self._frame,
+            self._header,
             textvariable=self._status_var,
             fg="#d7dde8",
             bg="#101216",
             anchor="w",
             justify="left",
-            font=("Segoe UI", 12),
+            font=("Segoe UI", 14),
         )
-        self._status.pack(fill="x")
+        self._status.pack(side="left", fill="x", expand=True)
+        self._state = tk.Label(
+            self._header,
+            textvariable=self._state_var,
+            fg="#ffffff",
+            bg="#2a7a41",
+            padx=8,
+            pady=4,
+            font=("Segoe UI", 11, "bold"),
+        )
+        self._state.pack(side="right")
         self._button_row = tk.Frame(self._frame, bg="#101216")
         self._button_row.pack(fill="x", pady=(6, 0))
         self.root.after(50, self._poll)
@@ -293,9 +322,11 @@ class SuggestionOverlay:
             except queue.Empty:
                 break
             if action == "hide":
-                self.root.withdraw()
+                self._render_idle(payload)
             elif action == "status":
                 self._render_status(str(payload))
+            elif action == "state":
+                self._set_state(bool(payload))
             elif action == "suggestions":
                 suggestions, hwnd = payload
                 self._render_suggestions(suggestions, hwnd)
@@ -325,24 +356,40 @@ class SuggestionOverlay:
         y = max(8, min(y, screen_height - height - 8))
         self.root.geometry(f"+{x}+{y}")
 
+    def _set_state(self, enabled: bool) -> None:
+        self._enabled = enabled
+        self._state_var.set("ON" if enabled else "OFF")
+        self._state.configure(bg="#2a7a41" if enabled else "#9b2d30")
+
+    def _render_idle(self, hwnd: int | None = None) -> None:
+        for button in self._buttons:
+            button.destroy()
+        self._buttons.clear()
+        self._button_row.pack_forget()
+        self._status_var.set("Nufi keyboard ON" if self._enabled else "Nufi keyboard OFF")
+        self._set_position(hwnd)
+        self.root.deiconify()
+
     def _render_status(self, message: str) -> None:
         for button in self._buttons:
             button.destroy()
         self._buttons.clear()
+        self._button_row.pack_forget()
         self._status_var.set(message)
         if message:
             self._set_position(None)
             self.root.deiconify()
         else:
-            self.root.withdraw()
+            self._render_idle(None)
 
     def _render_suggestions(self, suggestions: list[Suggestion], hwnd: int | None) -> None:
         for button in self._buttons:
             button.destroy()
         self._buttons.clear()
         if not suggestions:
-            self.root.withdraw()
+            self._render_idle(hwnd)
             return
+        self._button_row.pack(fill="x", pady=(6, 0))
         self._status_var.set("Suggestions  1..5 or Ctrl+Shift+1..5")
         for index, suggestion in enumerate(suggestions, start=1):
             button = self._tk.Button(
@@ -355,9 +402,9 @@ class SuggestionOverlay:
                 activeforeground="#ffffff",
                 relief="flat",
                 bd=0,
-                padx=10,
-                pady=6,
-                font=("Segoe UI", 12),
+                padx=16,
+                pady=10,
+                font=("Segoe UI", 14),
             )
             button.pack(side="left", padx=(0, 6))
             self._buttons.append(button)
@@ -367,11 +414,14 @@ class SuggestionOverlay:
     def show_status(self, message: str) -> None:
         self._queue.put(("status", message))
 
+    def set_enabled_state(self, enabled: bool) -> None:
+        self._queue.put(("state", enabled))
+
     def show_suggestions(self, suggestions: list[Suggestion], hwnd: int | None) -> None:
         self._queue.put(("suggestions", (suggestions, hwnd)))
 
-    def hide(self) -> None:
-        self._queue.put(("hide", None))
+    def hide(self, hwnd: int | None = None) -> None:
+        self._queue.put(("hide", hwnd))
 
     def run(self) -> None:
         self.root.mainloop()
@@ -430,12 +480,22 @@ class GlobalNufiWindowsKeyboard:
         self.pending_phrase_raw = ""
         self.raw_token = ""
         self.latest_suggestions = []
-        self.overlay.hide()
+        self.overlay.hide(self.active_hwnd)
+
+    def _modifier_combo_active(self) -> bool:
+        return self.ctrl_active or self.alt_active or self.win_active
+
+    def _record_exception(self, source: str, exc: Exception) -> None:
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        with open(LOG_PATH, "a", encoding="utf-8") as handle:
+            handle.write(f"[{timestamp}] {source}: {exc}\n")
+            handle.write(traceback.format_exc())
+            handle.write("\n")
+        self.overlay.show_status(f"Keyboard error in {source}. See {LOG_PATH}")
 
     def _replace_visible_text(self, source_visible: str, replacement_visible: str) -> None:
         import keyboard
 
-        print(f"[REPLACE] source={source_visible!r} ({len(source_visible)} backspaces) → replacement={replacement_visible!r}", flush=True)
         self.handling_injection = True
         try:
             for _ in range(len(source_visible)):
@@ -480,12 +540,12 @@ class GlobalNufiWindowsKeyboard:
 
     def _schedule_suggestion_fetch(self) -> None:
         if not self.enabled:
-            self.overlay.hide()
+            self.overlay.hide(self.active_hwnd)
             return
         query = self._visible_query_text()
         if not query:
             self.latest_suggestions = []
-            self.overlay.hide()
+            self.overlay.hide(self.active_hwnd)
             return
         self.fetch_generation += 1
         generation = self.fetch_generation
@@ -612,6 +672,7 @@ class GlobalNufiWindowsKeyboard:
 
     def _toggle_enabled(self) -> None:
         self.enabled = not self.enabled
+        self.overlay.set_enabled_state(self.enabled)
         if not self.enabled:
             self._reset_state()
             self.overlay.show_status("Nufi Windows keyboard OFF")
@@ -640,9 +701,6 @@ class GlobalNufiWindowsKeyboard:
         lowered = name.lower()
         typed_text = event_to_typed_text(event)
 
-        if event.event_type == "down":
-            print(f"[KEY] name={name!r} lowered={lowered!r} typed_text={typed_text!r} raw_token={self.raw_token!r}", flush=True)
-
         if lowered in {"ctrl", "left ctrl", "right ctrl"}:
             self.ctrl_active = event.event_type == "down"
             return
@@ -659,8 +717,11 @@ class GlobalNufiWindowsKeyboard:
         with self.lock:
             if not self.enabled:
                 return
-            if self.ctrl_active or self.alt_active or self.win_active:
-                self._reset_state()
+            if self._modifier_combo_active():
+                if self.latest_suggestions:
+                    self.overlay.show_suggestions(list(self.latest_suggestions), self.active_hwnd)
+                else:
+                    self.overlay.hide(self.active_hwnd)
                 return
             if lowered in SHIFT_KEYS:
                 return
@@ -702,19 +763,32 @@ class GlobalNufiWindowsKeyboard:
         import keyboard
 
         acquire_single_instance_lock()
-        keyboard.hook(self._handle_double_shift_toggle)
-        keyboard.hook(self._handle_key_event)
+        keyboard.hook(self._safe_handle_double_shift_toggle)
+        keyboard.hook(self._safe_handle_key_event)
         keyboard.add_hotkey("ctrl+alt+q", self.quit_requested.set)
         for index in range(self.suggestion_limit):
             keyboard.add_hotkey(
                 f"ctrl+shift+{index + 1}",
                 lambda idx=index: self.select_suggestion(idx),
             )
+        self.overlay.set_enabled_state(True)
         self.overlay.show_status("Nufi Windows keyboard ON")
 
         watcher = threading.Thread(target=self._watch_for_quit, daemon=True)
         watcher.start()
         self.overlay.run()
+
+    def _safe_handle_double_shift_toggle(self, event) -> None:
+        try:
+            self._handle_double_shift_toggle(event)
+        except Exception as exc:
+            self._record_exception("toggle", exc)
+
+    def _safe_handle_key_event(self, event) -> None:
+        try:
+            self._handle_key_event(event)
+        except Exception as exc:
+            self._record_exception("key", exc)
 
     def _watch_for_quit(self) -> None:
         while not self.quit_requested.wait(0.25):
