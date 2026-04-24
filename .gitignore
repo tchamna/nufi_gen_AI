@@ -19,6 +19,7 @@ build/
 # IDE
 .idea/
 .vscode/
+.claude/
 *.swp
 *.swo
 
@@ -52,3 +53,10 @@ data/nufi_wordcloud*.html
 data/nufi_wordcloud*.png
 data/nufi_wordcloud*.svg
 docs/*_latest.csv
+
+# Local secrets / packaged outputs
+sp.json
+deploy_static.zip
+windows_desktop/build/
+windows_desktop/dist/
+windows_desktop/share/
