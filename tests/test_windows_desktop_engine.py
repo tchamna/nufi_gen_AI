@@ -72,3 +72,13 @@ def test_engine_shortcut_hints_shrink_as_prefix_grows():
 def test_engine_does_not_expand_embedded_sms_alias_inside_longer_token():
     engine = NufiTransformEngine()
     assert engine.finalize_input("nkaff3") == "nkɑ̄ɑ̄"
+
+
+def test_engine_finalizes_plain_vowel_space_shortcuts():
+    engine = NufiTransformEngine()
+    assert engine.finalize_input("af ") == "ɑ"
+    assert engine.finalize_input("aff ") == "ɑ"
+    assert engine.finalize_input("eu ") == "ə"
+    assert engine.finalize_input("ai ") == "ε"
+    assert engine.finalize_input("uu ") == "ʉ"
+    assert engine.finalize_input("uuaf ") == "ʉɑ"

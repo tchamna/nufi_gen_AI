@@ -130,6 +130,16 @@ class NufiTransformEngine:
         self.exact_token_map = dict(clafrica_tokens)
         self.exact_token_map.update(sms_tokens)
         self.phrase_map = phrases
+        self.phrase_map.update(
+            {
+                "af ": "ɑ",
+                "aff ": "ɑ",
+                "eu ": "ə",
+                "ai ": "ε",
+                "uu ": "ʉ",
+                "uuaf ": "ʉɑ",
+            }
+        )
         self._add_optional_question_aliases()
         self.calendar_map = self._load_json_asset("nufi_calendar.json")
 

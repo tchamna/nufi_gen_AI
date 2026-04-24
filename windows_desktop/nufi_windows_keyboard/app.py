@@ -60,6 +60,10 @@ _MODIFIER_VK_CODES = (
     0x12, 0xA4, 0xA5,  # VK_MENU, VK_LMENU, VK_RMENU
 )
 _VK_CAPITAL = 0x14  # VK_CAPITAL / Caps Lock
+POINTER_OVERLAY_OFFSET_X = -24
+POINTER_OVERLAY_OFFSET_Y = 64
+CARET_OVERLAY_OFFSET_X = -24
+CARET_OVERLAY_OFFSET_Y = 56
 
 
 def acquire_single_instance_lock() -> None:
@@ -281,6 +285,8 @@ class SuggestionOverlay:
         self._on_select = on_select
         self._enabled = True
         self._anchor_hwnd: int | None = None
+        self._manual_position: tuple[int, int] | None = None
+        self._drag_offset: tuple[int, int] | None = None
 
         self._frame = tk.Frame(self.root, bg="#101216", padx=8, pady=8)
         self._frame.pack(fill="both", expand=True)
@@ -319,6 +325,10 @@ class SuggestionOverlay:
         self._hint.pack(fill="x", pady=(4, 0))
         self._button_row = tk.Frame(self._frame, bg="#101216")
         self._button_row.pack(fill="x", pady=(6, 0))
+        for widget in (self._header, self._status, self._hint, self._state):
+            widget.bind("<ButtonPress-1>", self._start_drag)
+            widget.bind("<B1-Motion>", self._drag_window)
+            widget.bind("<ButtonRelease-1>", self._end_drag)
         self.root.after(50, self._poll)
 
     @staticmethod
@@ -353,8 +363,6 @@ class SuggestionOverlay:
             elif action == "suggestions":
                 suggestions, hwnd = payload
                 self._render_suggestions(suggestions, hwnd)
-        if self.root.state() != "withdrawn":
-            self._set_position(self._anchor_hwnd)
         self.root.after(50, self._poll)
 
     def _apply_clamped_geometry(self, x: int, y: int) -> None:
@@ -368,6 +376,9 @@ class SuggestionOverlay:
         self.root.geometry(f"+{x}+{y}")
 
     def _set_position(self, hwnd: int | None) -> None:
+        if self._manual_position is not None:
+            self._apply_clamped_geometry(*self._manual_position)
+            return
         self.root.update_idletasks()
         width = self.root.winfo_reqwidth()
         height = self.root.winfo_reqheight()
@@ -377,11 +388,11 @@ class SuggestionOverlay:
         caret = get_caret_screen_point(hwnd)
         rect = get_window_rect(hwnd)
         if cursor is not None:
-            x = cursor[0] + 14
-            y = cursor[1] + 18
+            x = cursor[0] + POINTER_OVERLAY_OFFSET_X
+            y = cursor[1] + POINTER_OVERLAY_OFFSET_Y
         elif self._caret_is_usable(caret, rect):
-            x = caret[0] + 14
-            y = caret[1] + 12
+            x = caret[0] + CARET_OVERLAY_OFFSET_X
+            y = caret[1] + CARET_OVERLAY_OFFSET_Y
         elif rect is None:
             x = screen_width - width - 24
             y = screen_height - height - 24
@@ -391,6 +402,24 @@ class SuggestionOverlay:
             y = min(bottom - height - 24, top + 64)
 
         self._apply_clamped_geometry(x, y)
+
+    def _start_drag(self, event) -> None:
+        self.root.update_idletasks()
+        self._drag_offset = (
+            int(event.x_root - self.root.winfo_x()),
+            int(event.y_root - self.root.winfo_y()),
+        )
+
+    def _drag_window(self, event) -> None:
+        if self._drag_offset is None:
+            return
+        x = int(event.x_root - self._drag_offset[0])
+        y = int(event.y_root - self._drag_offset[1])
+        self._manual_position = (x, y)
+        self._apply_clamped_geometry(x, y)
+
+    def _end_drag(self, _event) -> None:
+        self._drag_offset = None
 
     def _set_state(self, enabled: bool) -> None:
         self._enabled = enabled
@@ -664,7 +693,7 @@ class GlobalNufiWindowsKeyboard:
 
         if delimiter_visible.isspace():
             source_visible = combined_raw + delimiter_visible
-            replacement_visible = self.engine.finalize_input(combined_raw) + delimiter_visible
+            replacement_visible = self.engine.finalize_input(source_visible)
         else:
             source_visible = combined_raw + delimiter_visible
             replacement_visible = self.engine.finalize_input(source_visible)
