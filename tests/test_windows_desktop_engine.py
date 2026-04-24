@@ -52,3 +52,23 @@ def test_engine_finalizes_former_dollar_shortcuts_without_dollar_suffix():
     engine = NufiTransformEngine()
     for shortcut, expected in FORMER_DOLLAR_SHORTCUTS.items():
         assert engine.finalize_input(shortcut) == expected
+
+
+def test_engine_lists_shortcut_hints_for_prefix():
+    engine = NufiTransformEngine()
+    hints = engine.get_shortcut_hints("mb", limit=6)
+    suffixes = {hint.remaining for hint in hints}
+    assert "'" in suffixes
+    assert "k" in suffixes
+    assert "l" in suffixes
+
+
+def test_engine_shortcut_hints_shrink_as_prefix_grows():
+    engine = NufiTransformEngine()
+    hints = engine.get_shortcut_hints("mbl", limit=6)
+    assert hints == []
+
+
+def test_engine_does_not_expand_embedded_sms_alias_inside_longer_token():
+    engine = NufiTransformEngine()
+    assert engine.finalize_input("nkaff3") == "nkɑ̄ɑ̄"

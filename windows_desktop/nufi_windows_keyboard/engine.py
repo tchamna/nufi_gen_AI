@@ -14,6 +14,13 @@ class DynamicDateAlias:
     intro: str | None = None
 
 
+@dataclass(frozen=True)
+class ShortcutHint:
+    prefix: str
+    shortcut: str
+    remaining: str
+
+
 class NufiTransformEngine:
     def __init__(self, asset_root: Path | None = None) -> None:
         if asset_root is None:
@@ -83,6 +90,19 @@ class NufiTransformEngine:
             for key in self.phrase_map.keys()
             if any(len(other) > len(key) and other.startswith(key) for other in self.phrase_map.keys())
         }
+        all_shortcut_keys = {
+            *(self.exact_token_map.keys()),
+            *(self.phrase_map.keys()),
+            *(self.dynamic_date_aliases.keys()),
+        }
+        self.shortcut_keys_sorted = sorted(
+            (
+                key
+                for key in all_shortcut_keys
+                if not (key.endswith("?") and key[:-1] in all_shortcut_keys)
+            ),
+            key=lambda item: (len(item), item.lower(), item),
+        )
 
     def _load_json_asset(self, name: str) -> dict[str, str]:
         with (self.asset_root / name).open("r", encoding="utf-8") as handle:
@@ -290,6 +310,11 @@ class NufiTransformEngine:
             if resolved is not None:
                 return self._mapped_value_for_canonical_key(resolved) or token
 
+        return self._apply_compositional_mapping_to_token(token)
+
+    def _apply_compositional_mapping_to_token(self, token: str) -> str:
+        if not token:
+            return token
         if self._contains_non_ascii(token):
             return token
 
@@ -330,17 +355,17 @@ class NufiTransformEngine:
         ):
             prefix = token[:-len(exact_trailing_key)]
             mapped_suffix = self._mapped_composable_value_for_canonical_key(exact_canonical) or exact_trailing_key
-            return self._apply_mapping_to_token(prefix) + mapped_suffix
+            return self._apply_compositional_mapping_to_token(prefix) + mapped_suffix
 
         ambiguous_suffix = self._get_ambiguous_trailing_suffix(token)
         if ambiguous_suffix is not None:
             prefix = token[:-len(ambiguous_suffix)]
-            return self._apply_mapping_to_token(prefix) + ambiguous_suffix
+            return self._apply_compositional_mapping_to_token(prefix) + ambiguous_suffix
 
         prefix_suffix = self._get_longest_trailing_prefix(token)
         if prefix_suffix is not None:
             prefix = token[:-len(prefix_suffix)]
-            return self._apply_mapping_to_token(prefix) + prefix_suffix
+            return self._apply_compositional_mapping_to_token(prefix) + prefix_suffix
 
         return self._apply_mapping_to_token(token)
 
@@ -360,7 +385,7 @@ class NufiTransformEngine:
             if exact_trailing_key is not None and exact_canonical is not None:
                 prefix = current[:-len(exact_trailing_key)]
                 mapped_suffix = self._mapped_composable_value_for_canonical_key(exact_canonical) or exact_trailing_key
-                next_value = self._apply_mapping_to_token(prefix) + mapped_suffix
+                next_value = self._apply_compositional_mapping_to_token(prefix) + mapped_suffix
                 if next_value != current:
                     current = next_value
                     changed = True
@@ -421,3 +446,26 @@ class NufiTransformEngine:
             return True
 
         return self.finalize_input(candidate) != candidate
+
+    def get_shortcut_hints(self, prefix: str, limit: int = 6) -> list[ShortcutHint]:
+        if not prefix:
+            return []
+
+        prefix_lower = prefix.lower()
+        exact_case: list[ShortcutHint] = []
+        case_folded: list[ShortcutHint] = []
+        for shortcut in self.shortcut_keys_sorted:
+            if len(shortcut) <= len(prefix):
+                continue
+            if shortcut.startswith(prefix):
+                exact_case.append(
+                    ShortcutHint(prefix=prefix, shortcut=shortcut, remaining=shortcut[len(prefix):])
+                )
+                continue
+            if self._is_ascii_only(shortcut) and shortcut.lower().startswith(prefix_lower):
+                case_folded.append(
+                    ShortcutHint(prefix=prefix, shortcut=shortcut, remaining=shortcut[len(prefix):])
+                )
+            if len(exact_case) >= limit:
+                break
+        return (exact_case + case_folded)[:limit]

@@ -16,7 +16,7 @@ from typing import Callable
 
 import requests
 
-from .engine import NufiTransformEngine
+from .engine import NufiTransformEngine, ShortcutHint
 
 
 USER32 = ctypes.windll.user32
@@ -275,6 +275,7 @@ class SuggestionOverlay:
         self.root.wm_attributes("-alpha", 0.96)
         self._queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self._status_var = tk.StringVar(value="")
+        self._hint_var = tk.StringVar(value="")
         self._state_var = tk.StringVar(value="ON")
         self._buttons: list[tk.Button] = []
         self._on_select = on_select
@@ -305,6 +306,17 @@ class SuggestionOverlay:
             font=("Segoe UI", 11, "bold"),
         )
         self._state.pack(side="right")
+        self._hint = tk.Label(
+            self._frame,
+            textvariable=self._hint_var,
+            fg="#9fb0c4",
+            bg="#101216",
+            anchor="w",
+            justify="left",
+            font=("Segoe UI", 11),
+            wraplength=1100,
+        )
+        self._hint.pack(fill="x", pady=(4, 0))
         self._button_row = tk.Frame(self._frame, bg="#101216")
         self._button_row.pack(fill="x", pady=(6, 0))
         self.root.after(50, self._poll)
@@ -335,6 +347,9 @@ class SuggestionOverlay:
                 self._render_status(str(payload))
             elif action == "state":
                 self._set_state(bool(payload))
+            elif action == "shortcut_hints":
+                prefix, hints = payload
+                self._render_shortcut_hints(str(prefix), list(hints))
             elif action == "suggestions":
                 suggestions, hwnd = payload
                 self._render_suggestions(suggestions, hwnd)
@@ -381,6 +396,19 @@ class SuggestionOverlay:
         self._enabled = enabled
         self._state_var.set("ON" if enabled else "OFF")
         self._state.configure(bg="#2a7a41" if enabled else "#9b2d30")
+
+    @staticmethod
+    def _format_shortcut_hints(prefix: str, hints: list[ShortcutHint]) -> str:
+        if not prefix or not hints:
+            return ""
+        parts = [f"{prefix}[{hint.remaining}]" for hint in hints if hint.remaining]
+        if not parts:
+            return ""
+        return "Shortcuts: " + ", ".join(parts)
+
+    def _render_shortcut_hints(self, prefix: str, hints: list[ShortcutHint]) -> None:
+        text = self._format_shortcut_hints(prefix, hints)
+        self._hint_var.set(text)
 
     def _render_idle(self, hwnd: int | None = None) -> None:
         self._anchor_hwnd = hwnd
@@ -445,6 +473,9 @@ class SuggestionOverlay:
     def set_enabled_state(self, enabled: bool) -> None:
         self._queue.put(("state", enabled))
 
+    def show_shortcut_hints(self, prefix: str, hints: list[ShortcutHint]) -> None:
+        self._queue.put(("shortcut_hints", (prefix, hints)))
+
     def show_suggestions(self, suggestions: list[Suggestion], hwnd: int | None) -> None:
         self._queue.put(("suggestions", (suggestions, hwnd)))
 
@@ -481,6 +512,7 @@ class GlobalNufiWindowsKeyboard:
         self.pending_phrase_raw = ""
         self.raw_token = ""
         self.latest_suggestions: list[Suggestion] = []
+        self.latest_shortcut_hints: list[ShortcutHint] = []
         self.fetch_generation = 0
         self.fetch_timer: threading.Timer | None = None
 
@@ -508,10 +540,21 @@ class GlobalNufiWindowsKeyboard:
         self.pending_phrase_raw = ""
         self.raw_token = ""
         self.latest_suggestions = []
+        self.latest_shortcut_hints = []
+        self.overlay.show_shortcut_hints("", [])
         self.overlay.hide(self.active_hwnd)
 
     def _modifier_combo_active(self) -> bool:
         return self.ctrl_active or self.alt_active or self.win_active
+
+    def _current_shortcut_prefix(self) -> str:
+        return self.pending_phrase_raw + self.raw_token
+
+    def _update_shortcut_hints(self) -> None:
+        prefix = self._current_shortcut_prefix()
+        hints = self.engine.get_shortcut_hints(prefix, limit=6) if prefix else []
+        self.latest_shortcut_hints = hints
+        self.overlay.show_shortcut_hints(prefix, hints)
 
     def _record_exception(self, source: str, exc: Exception) -> None:
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -550,6 +593,7 @@ class GlobalNufiWindowsKeyboard:
         self.committed_context = self._trim_context(self.committed_context + completed)
         self.pending_phrase_raw = ""
         self.raw_token = ""
+        self._update_shortcut_hints()
         if self.latest_suggestions:
             self.overlay.show_suggestions(list(self.latest_suggestions), self.active_hwnd)
         self._schedule_suggestion_fetch()
@@ -612,6 +656,7 @@ class GlobalNufiWindowsKeyboard:
         if delimiter_visible.isspace() and self._is_phrase_prefix(combined_raw + delimiter_visible):
             self.pending_phrase_raw += self.raw_token + delimiter_visible
             self.raw_token = ""
+            self._update_shortcut_hints()
             if self.latest_suggestions:
                 self.overlay.show_suggestions(list(self.latest_suggestions), self.active_hwnd)
             self._schedule_suggestion_fetch()
@@ -629,6 +674,7 @@ class GlobalNufiWindowsKeyboard:
         self.committed_context = self._trim_context(self.committed_context + replacement_visible)
         self.pending_phrase_raw = ""
         self.raw_token = ""
+        self._update_shortcut_hints()
         if self.latest_suggestions:
             self.overlay.show_suggestions(list(self.latest_suggestions), self.active_hwnd)
         self._schedule_suggestion_fetch()
@@ -637,19 +683,23 @@ class GlobalNufiWindowsKeyboard:
         self.raw_token += name
         if self._try_auto_complete_current_entry():
             return
+        self._update_shortcut_hints()
         self._schedule_suggestion_fetch()
 
     def _handle_backspace(self) -> None:
         if self.raw_token:
             self.raw_token = self.raw_token[:-1]
+            self._update_shortcut_hints()
             self._schedule_suggestion_fetch()
             return
         if self.pending_phrase_raw:
             self.pending_phrase_raw = self.pending_phrase_raw[:-1]
+            self._update_shortcut_hints()
             self._schedule_suggestion_fetch()
             return
         if self.committed_context:
             self.committed_context = self.committed_context[:-1]
+        self._update_shortcut_hints()
         self._schedule_suggestion_fetch()
 
     def select_suggestion(self, index: int, remove_typed_digit: bool = False) -> None:
@@ -680,6 +730,7 @@ class GlobalNufiWindowsKeyboard:
                 )
                 self.pending_phrase_raw = ""
                 self.raw_token = ""
+                self._update_shortcut_hints()
             else:
                 needs_space = bool(self.committed_context and not self.committed_context[-1].isspace())
                 insertion = f"{' ' if needs_space else ''}{suggestion.word} "
@@ -691,6 +742,7 @@ class GlobalNufiWindowsKeyboard:
                 finally:
                     self.handling_injection = False
                 self.committed_context = self._trim_context(self.committed_context + insertion)
+                self._update_shortcut_hints()
             self._schedule_suggestion_fetch()
 
     def _schedule_digit_selection(self, index: int) -> None:
