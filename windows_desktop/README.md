@@ -29,6 +29,12 @@ py -m pip install -r windows_desktop\requirements.txt
 py windows_desktop\run_nufi_windows_keyboard.py
 ```
 
+Experimental live-transform version:
+
+```powershell
+py windows_desktop\run_nufi_windows_keyboard_live.py
+```
+
 Use another API base URL:
 
 ```powershell

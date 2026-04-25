@@ -82,3 +82,8 @@ def test_engine_finalizes_plain_vowel_space_shortcuts():
     assert engine.finalize_input("ai ") == "ε"
     assert engine.finalize_input("uu ") == "ʉ"
     assert engine.finalize_input("uuaf ") == "ʉɑ"
+
+
+def test_engine_applies_uu_inside_longer_word():
+    engine = NufiTransformEngine()
+    assert engine.finalize_input("ntuu") == "ntʉ"

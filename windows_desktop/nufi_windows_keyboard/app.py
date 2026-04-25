@@ -60,6 +60,9 @@ _MODIFIER_VK_CODES = (
     0x12, 0xA4, 0xA5,  # VK_MENU, VK_LMENU, VK_RMENU
 )
 _VK_CAPITAL = 0x14  # VK_CAPITAL / Caps Lock
+VK_LBUTTON = 0x01
+VK_RBUTTON = 0x02
+VK_MBUTTON = 0x04
 POINTER_OVERLAY_OFFSET_X = -24
 POINTER_OVERLAY_OFFSET_Y = 64
 CARET_OVERLAY_OFFSET_X = -24
@@ -267,7 +270,7 @@ class PredictionClient:
 
 
 class SuggestionOverlay:
-    def __init__(self, on_select: Callable[[int], None]) -> None:
+    def __init__(self, on_select: Callable[[int], None], on_quit: Callable[[], None]) -> None:
         import tkinter as tk
 
         self._tk = tk
@@ -283,10 +286,12 @@ class SuggestionOverlay:
         self._state_var = tk.StringVar(value="ON")
         self._buttons: list[tk.Button] = []
         self._on_select = on_select
+        self._on_quit = on_quit
         self._enabled = True
         self._anchor_hwnd: int | None = None
         self._manual_position: tuple[int, int] | None = None
         self._drag_offset: tuple[int, int] | None = None
+        self._mode_label = "Clafrica+"
 
         self._frame = tk.Frame(self.root, bg="#101216", padx=8, pady=8)
         self._frame.pack(fill="both", expand=True)
@@ -311,7 +316,22 @@ class SuggestionOverlay:
             pady=4,
             font=("Segoe UI", 11, "bold"),
         )
-        self._state.pack(side="right")
+        self._state.pack(side="right", padx=(0, 6))
+        self._exit_button = tk.Button(
+            self._header,
+            text="Exit",
+            command=self._on_quit,
+            bg="#8b2d2f",
+            fg="#ffffff",
+            activebackground="#a43a3d",
+            activeforeground="#ffffff",
+            relief="flat",
+            bd=0,
+            padx=10,
+            pady=4,
+            font=("Segoe UI", 10, "bold"),
+        )
+        self._exit_button.pack(side="right")
         self._hint = tk.Label(
             self._frame,
             textvariable=self._hint_var,
@@ -357,6 +377,8 @@ class SuggestionOverlay:
                 self._render_status(str(payload))
             elif action == "state":
                 self._set_state(bool(payload))
+            elif action == "mode_label":
+                self._mode_label = str(payload)
             elif action == "shortcut_hints":
                 prefix, hints = payload
                 self._render_shortcut_hints(str(prefix), list(hints))
@@ -446,9 +468,9 @@ class SuggestionOverlay:
         self._buttons.clear()
         self._button_row.pack_forget()
         self._status_var.set(
-            "Clafrica+ ON  |  Double-Shift (\u2191\u2191) toggles ON/OFF"
+            f"{self._mode_label} ON  |  Double-Shift (\u2191\u2191) toggles ON/OFF"
             if self._enabled
-            else "Clafrica+ OFF  |  Double-Shift (\u2191\u2191) toggles ON/OFF"
+            else f"{self._mode_label} OFF  |  Double-Shift (\u2191\u2191) toggles ON/OFF"
         )
         self._set_position(hwnd)
         self.root.deiconify()
@@ -502,6 +524,9 @@ class SuggestionOverlay:
     def set_enabled_state(self, enabled: bool) -> None:
         self._queue.put(("state", enabled))
 
+    def set_mode_label(self, label: str) -> None:
+        self._queue.put(("mode_label", label))
+
     def show_shortcut_hints(self, prefix: str, hints: list[ShortcutHint]) -> None:
         self._queue.put(("shortcut_hints", (prefix, hints)))
 
@@ -521,10 +546,12 @@ class GlobalNufiWindowsKeyboard:
         api_base_url: str,
         suggestion_limit: int = 5,
         suggestion_delay_ms: int = 250,
+        live_transform: bool = False,
     ) -> None:
         self.api_base_url = api_base_url.rstrip("/")
         self.suggestion_limit = suggestion_limit
         self.suggestion_delay_ms = suggestion_delay_ms
+        self.live_transform = live_transform
         self.engine = NufiTransformEngine()
         self.predictor = PredictionClient(self.api_base_url)
         self.enabled = True
@@ -535,15 +562,18 @@ class GlobalNufiWindowsKeyboard:
         self.quit_requested = threading.Event()
         self.handling_injection = False
         self.lock = threading.RLock()
-        self.overlay = SuggestionOverlay(self.select_suggestion)
+        self.overlay = SuggestionOverlay(self.select_suggestion, self.quit_requested.set)
+        self.overlay.set_mode_label("Clafrica+ Live" if self.live_transform else "Clafrica+")
         self.active_hwnd: int | None = None
         self.committed_context = ""
         self.pending_phrase_raw = ""
         self.raw_token = ""
+        self.displayed_active_text = ""
         self.latest_suggestions: list[Suggestion] = []
         self.latest_shortcut_hints: list[ShortcutHint] = []
         self.fetch_generation = 0
         self.fetch_timer: threading.Timer | None = None
+        self._mouse_down = False
 
     @staticmethod
     def _is_shift_event(event) -> bool:
@@ -568,6 +598,7 @@ class GlobalNufiWindowsKeyboard:
         self.committed_context = ""
         self.pending_phrase_raw = ""
         self.raw_token = ""
+        self.displayed_active_text = ""
         self.latest_suggestions = []
         self.latest_shortcut_hints = []
         self.overlay.show_shortcut_hints("", [])
@@ -578,6 +609,21 @@ class GlobalNufiWindowsKeyboard:
 
     def _current_shortcut_prefix(self) -> str:
         return self.pending_phrase_raw + self.raw_token
+
+    def _status_text(self, enabled: bool) -> str:
+        mode = "Clafrica+ Live" if self.live_transform else "Clafrica+"
+        state = "ON" if enabled else "OFF"
+        return f"{mode} {state}  |  Double-Shift (\u2191\u2191) toggles ON/OFF"
+
+    def _visible_active_text(self) -> str:
+        if self.live_transform:
+            return self.displayed_active_text
+        return self.pending_phrase_raw + self.raw_token
+
+    def _live_mapped_text(self, raw_text: str) -> str:
+        if not raw_text:
+            return ""
+        return self.engine.apply_mapping(raw_text, preserve_ambiguous_trailing_token=True)
 
     def _update_shortcut_hints(self) -> None:
         prefix = self._current_shortcut_prefix()
@@ -593,6 +639,24 @@ class GlobalNufiWindowsKeyboard:
             handle.write("\n")
         self.overlay.show_status(f"Keyboard error in {source}. See {LOG_PATH}")
 
+    @staticmethod
+    def _is_any_mouse_button_down() -> bool:
+        return any(
+            USER32.GetAsyncKeyState(vk) & 0x8000
+            for vk in (VK_LBUTTON, VK_RBUTTON, VK_MBUTTON)
+        )
+
+    def _watch_for_mouse_activity(self) -> None:
+        while not self.quit_requested.wait(0.05):
+            mouse_down = self._is_any_mouse_button_down()
+            if mouse_down and not self._mouse_down:
+                with self.lock:
+                    if self.live_transform and (
+                        self.raw_token or self.pending_phrase_raw or self.displayed_active_text
+                    ):
+                        self._reset_state()
+            self._mouse_down = mouse_down
+
     def _replace_visible_text(self, source_visible: str, replacement_visible: str) -> None:
         import keyboard
 
@@ -606,13 +670,18 @@ class GlobalNufiWindowsKeyboard:
             self.handling_injection = False
 
     def _visible_query_text(self) -> str:
-        live_text = self.committed_context + self.pending_phrase_raw + self.engine.apply_mapping(
-            self.raw_token,
-            preserve_ambiguous_trailing_token=True,
-        )
+        if self.live_transform:
+            live_text = self.committed_context + self._visible_active_text()
+        else:
+            live_text = self.committed_context + self.pending_phrase_raw + self.engine.apply_mapping(
+                self.raw_token,
+                preserve_ambiguous_trailing_token=True,
+            )
         return self._normalize_query(live_text)
 
     def _try_auto_complete_current_entry(self) -> bool:
+        if self.live_transform:
+            return False
         combined_raw = self.pending_phrase_raw + self.raw_token
         completed = self.engine.auto_complete_exact_text(combined_raw)
         if not completed or completed == combined_raw:
@@ -628,11 +697,44 @@ class GlobalNufiWindowsKeyboard:
         self._schedule_suggestion_fetch()
         return True
 
+    def _apply_live_transform_after_input(self, appended_visible: str = "") -> None:
+        raw_text = self.pending_phrase_raw + self.raw_token
+        previous_visible = self.displayed_active_text
+        current_visible = previous_visible + appended_visible
+        next_visible = self._live_mapped_text(raw_text)
+        if current_visible != next_visible:
+            self._replace_visible_text(current_visible, next_visible)
+        self.displayed_active_text = next_visible
+
+    def _apply_live_transform_after_backspace(self) -> None:
+        raw_text = self.pending_phrase_raw + self.raw_token
+        previous_visible = self.displayed_active_text
+        current_visible = previous_visible[:-1] if previous_visible else ""
+        next_visible = self._live_mapped_text(raw_text)
+        if current_visible != next_visible:
+            self._replace_visible_text(current_visible, next_visible)
+        self.displayed_active_text = next_visible
+
+    def _finalized_visible_text(self, source_raw: str, delimiter_visible: str) -> str:
+        finalized_raw = self.engine.finalize_input(source_raw)
+        if not self.live_transform:
+            return finalized_raw
+        combined_raw = self.pending_phrase_raw + self.raw_token
+        visible_active = self._visible_active_text()
+        if finalized_raw != source_raw:
+            return finalized_raw
+        if visible_active and visible_active != combined_raw:
+            return visible_active + delimiter_visible
+        return finalized_raw
+
     def _should_use_digit_for_suggestion(self, digit_text: str) -> bool:
         if digit_text not in {"1", "2", "3", "4", "5"} or not self.latest_suggestions:
             return False
 
         combined_raw = self.pending_phrase_raw + self.raw_token
+        if combined_raw.endswith(("'", "’")):
+            index = int(digit_text) - 1
+            return index < len(self.latest_suggestions)
         if combined_raw and self.engine.would_transform_with_appended_text(combined_raw, digit_text):
             return False
 
@@ -683,26 +785,30 @@ class GlobalNufiWindowsKeyboard:
         combined_raw = self.pending_phrase_raw + self.raw_token
 
         if delimiter_visible.isspace() and self._is_phrase_prefix(combined_raw + delimiter_visible):
+            source_visible = self._visible_active_text() + delimiter_visible
             self.pending_phrase_raw += self.raw_token + delimiter_visible
             self.raw_token = ""
+            if self.live_transform:
+                next_visible = self._live_mapped_text(self.pending_phrase_raw)
+                if source_visible != next_visible:
+                    self._replace_visible_text(source_visible, next_visible)
+                self.displayed_active_text = next_visible
             self._update_shortcut_hints()
             if self.latest_suggestions:
                 self.overlay.show_suggestions(list(self.latest_suggestions), self.active_hwnd)
             self._schedule_suggestion_fetch()
             return
 
-        if delimiter_visible.isspace():
-            source_visible = combined_raw + delimiter_visible
-            replacement_visible = self.engine.finalize_input(source_visible)
-        else:
-            source_visible = combined_raw + delimiter_visible
-            replacement_visible = self.engine.finalize_input(source_visible)
+        source_visible = self._visible_active_text() + delimiter_visible
+        source_raw = combined_raw + delimiter_visible
+        replacement_visible = self._finalized_visible_text(source_raw, delimiter_visible)
 
         if replacement_visible != source_visible:
             self._replace_visible_text(source_visible, replacement_visible)
         self.committed_context = self._trim_context(self.committed_context + replacement_visible)
         self.pending_phrase_raw = ""
         self.raw_token = ""
+        self.displayed_active_text = ""
         self._update_shortcut_hints()
         if self.latest_suggestions:
             self.overlay.show_suggestions(list(self.latest_suggestions), self.active_hwnd)
@@ -712,17 +818,23 @@ class GlobalNufiWindowsKeyboard:
         self.raw_token += name
         if self._try_auto_complete_current_entry():
             return
+        if self.live_transform:
+            self._apply_live_transform_after_input(name)
         self._update_shortcut_hints()
         self._schedule_suggestion_fetch()
 
     def _handle_backspace(self) -> None:
         if self.raw_token:
             self.raw_token = self.raw_token[:-1]
+            if self.live_transform:
+                self._apply_live_transform_after_backspace()
             self._update_shortcut_hints()
             self._schedule_suggestion_fetch()
             return
         if self.pending_phrase_raw:
             self.pending_phrase_raw = self.pending_phrase_raw[:-1]
+            if self.live_transform:
+                self._apply_live_transform_after_backspace()
             self._update_shortcut_hints()
             self._schedule_suggestion_fetch()
             return
@@ -753,12 +865,13 @@ class GlobalNufiWindowsKeyboard:
             if combined_raw:
                 finalized = self.engine.finalize_input(combined_raw)
                 replacement = f"{finalized} {suggestion.word} "
-                self._replace_visible_text(combined_raw, replacement)
+                self._replace_visible_text(self._visible_active_text(), replacement)
                 self.committed_context = self._trim_context(
                     self.committed_context + replacement
                 )
                 self.pending_phrase_raw = ""
                 self.raw_token = ""
+                self.displayed_active_text = ""
                 self._update_shortcut_hints()
             else:
                 needs_space = bool(self.committed_context and not self.committed_context[-1].isspace())
@@ -784,9 +897,9 @@ class GlobalNufiWindowsKeyboard:
         self.overlay.set_enabled_state(self.enabled)
         if not self.enabled:
             self._reset_state()
-            self.overlay.show_status("Clafrica+ OFF  |  Double-Shift (\u2191\u2191) toggles ON/OFF")
+            self.overlay.show_status(self._status_text(False))
         else:
-            self.overlay.show_status("Clafrica+ ON  |  Double-Shift (\u2191\u2191) toggles ON/OFF")
+            self.overlay.show_status(self._status_text(True))
             self._schedule_suggestion_fetch()
 
     def _handle_double_shift_toggle(self, event) -> None:
@@ -881,10 +994,12 @@ class GlobalNufiWindowsKeyboard:
                 lambda idx=index: self.select_suggestion(idx),
             )
         self.overlay.set_enabled_state(True)
-        self.overlay.show_status("Clafrica+ ON  |  Double-Shift (\u2191\u2191) toggles ON/OFF")
+        self.overlay.show_status(self._status_text(True))
 
         watcher = threading.Thread(target=self._watch_for_quit, daemon=True)
         watcher.start()
+        mouse_watcher = threading.Thread(target=self._watch_for_mouse_activity, daemon=True)
+        mouse_watcher.start()
         self.overlay.run()
 
     def _safe_handle_double_shift_toggle(self, event) -> None:
@@ -925,6 +1040,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default=250,
         help="Debounce delay before calling the prediction API.",
     )
+    parser.add_argument(
+        "--live-transform",
+        action="store_true",
+        help="Experimental mode: rewrite the active shortcut as you type.",
+    )
     return parser.parse_args(argv)
 
 
@@ -934,6 +1054,7 @@ def main(argv: list[str] | None = None) -> int:
         api_base_url=args.api_base_url,
         suggestion_limit=args.suggestion_limit,
         suggestion_delay_ms=args.suggestion_delay_ms,
+        live_transform=args.live_transform,
     )
     app.run()
     return 0

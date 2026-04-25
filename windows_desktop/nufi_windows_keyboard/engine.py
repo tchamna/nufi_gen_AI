@@ -126,6 +126,7 @@ class NufiTransformEngine:
         phrases: dict[str, str] = {}
         self._load_asset_map("clafrica.json", clafrica_tokens, phrases)
         self._load_asset_map("nufi_sms.json", sms_tokens, phrases)
+        clafrica_tokens["uu"] = "ʉ"
         self.clafrica_token_map = clafrica_tokens
         self.exact_token_map = dict(clafrica_tokens)
         self.exact_token_map.update(sms_tokens)
