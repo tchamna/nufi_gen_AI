@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 
+from .custom_shortcuts import REMOVAL_SENTINEL, load_shortcuts
+
 
 @dataclass(frozen=True)
 class DynamicDateAlias:
@@ -22,7 +24,11 @@ class ShortcutHint:
 
 
 class NufiTransformEngine:
-    def __init__(self, asset_root: Path | None = None) -> None:
+    def __init__(
+        self,
+        asset_root: Path | None = None,
+        custom_shortcuts_path: Path | None = None,
+    ) -> None:
         if asset_root is None:
             if getattr(sys, "_MEIPASS", None):
                 asset_root = (
@@ -43,6 +49,7 @@ class NufiTransformEngine:
                     / "assets"
                 )
         self.asset_root = asset_root
+        self.custom_shortcuts_path = custom_shortcuts_path
         self.default_calendar_intro = "Zě'é mɑ́"
         self.dynamic_date_aliases = {
             "today*": DynamicDateAlias(0),
@@ -142,7 +149,39 @@ class NufiTransformEngine:
             }
         )
         self._add_optional_question_aliases()
+        self._load_custom_shortcuts()
         self.calendar_map = self._load_json_asset("nufi_calendar.json")
+
+    def _load_custom_shortcuts(self) -> None:
+        if self.custom_shortcuts_path is None:
+            return
+        for key, value in load_shortcuts(self.custom_shortcuts_path).items():
+            if value == REMOVAL_SENTINEL:
+                self._remove_shortcut_key(key)
+                continue
+            if any(ch.isspace() for ch in key):
+                self.phrase_map[key] = value
+            else:
+                self.exact_token_map[key] = value
+        self._add_optional_question_aliases()
+
+    def _remove_shortcut_key(self, key: str) -> None:
+        self.exact_token_map.pop(key, None)
+        self.clafrica_token_map.pop(key, None)
+        self.phrase_map.pop(key, None)
+        self.dynamic_date_aliases.pop(key.lower(), None)
+        if key.endswith("?"):
+            alias = key[:-1]
+            self.exact_token_map.pop(alias, None)
+            self.clafrica_token_map.pop(alias, None)
+            self.phrase_map.pop(alias, None)
+            self.dynamic_date_aliases.pop(alias.lower(), None)
+        else:
+            optional_alias = f"{key}?"
+            self.exact_token_map.pop(optional_alias, None)
+            self.clafrica_token_map.pop(optional_alias, None)
+            self.phrase_map.pop(optional_alias, None)
+            self.dynamic_date_aliases.pop(optional_alias.lower(), None)
 
     def _add_optional_question_aliases(self) -> None:
         token_aliases: dict[str, str] = {}
