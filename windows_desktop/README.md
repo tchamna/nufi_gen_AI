@@ -5,7 +5,7 @@ This is a Windows desktop typing agent inspired by the `input-method` repo and w
 What it does:
 
 - runs globally across Windows text fields
-- finalizes Nufi keyboard transforms when you press `Space`, `Tab`, `Enter`, or punctuation delimiters
+- transforms Nufi shortcuts as you type
 - calls the same prediction API route as Android: `/api/keyboard/suggest`
 - shows a small always-on-top suggestion strip
 - inserts suggestions with `Ctrl+Shift+1` through `Ctrl+Shift+5`
@@ -29,10 +29,10 @@ py -m pip install -r windows_desktop\requirements.txt
 py windows_desktop\run_nufi_windows_keyboard.py
 ```
 
-Experimental live-transform version:
+Stable fallback version:
 
 ```powershell
-py windows_desktop\run_nufi_windows_keyboard_live.py
+py windows_desktop\run_nufi_windows_keyboard_stable.py
 ```
 
 Use another API base URL:

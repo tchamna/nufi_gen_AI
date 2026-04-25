@@ -316,7 +316,6 @@ class SuggestionOverlay:
             pady=4,
             font=("Segoe UI", 11, "bold"),
         )
-        self._state.pack(side="right", padx=(0, 6))
         self._exit_button = tk.Button(
             self._header,
             text="Exit",
@@ -332,6 +331,7 @@ class SuggestionOverlay:
             font=("Segoe UI", 10, "bold"),
         )
         self._exit_button.pack(side="right")
+        self._state.pack(side="right", padx=(0, 6))
         self._hint = tk.Label(
             self._frame,
             textvariable=self._hint_var,
@@ -546,7 +546,7 @@ class GlobalNufiWindowsKeyboard:
         api_base_url: str,
         suggestion_limit: int = 5,
         suggestion_delay_ms: int = 250,
-        live_transform: bool = False,
+        live_transform: bool = True,
     ) -> None:
         self.api_base_url = api_base_url.rstrip("/")
         self.suggestion_limit = suggestion_limit
@@ -563,7 +563,7 @@ class GlobalNufiWindowsKeyboard:
         self.handling_injection = False
         self.lock = threading.RLock()
         self.overlay = SuggestionOverlay(self.select_suggestion, self.quit_requested.set)
-        self.overlay.set_mode_label("Clafrica+ Live" if self.live_transform else "Clafrica+")
+        self.overlay.set_mode_label("Clafrica+" if self.live_transform else "Clafrica+ Stable")
         self.active_hwnd: int | None = None
         self.committed_context = ""
         self.pending_phrase_raw = ""
@@ -574,6 +574,7 @@ class GlobalNufiWindowsKeyboard:
         self.fetch_generation = 0
         self.fetch_timer: threading.Timer | None = None
         self._mouse_down = False
+        self._last_shift_down_time = 0.0
 
     @staticmethod
     def _is_shift_event(event) -> bool:
@@ -611,7 +612,7 @@ class GlobalNufiWindowsKeyboard:
         return self.pending_phrase_raw + self.raw_token
 
     def _status_text(self, enabled: bool) -> str:
-        mode = "Clafrica+ Live" if self.live_transform else "Clafrica+"
+        mode = "Clafrica+" if self.live_transform else "Clafrica+ Stable"
         state = "ON" if enabled else "OFF"
         return f"{mode} {state}  |  Double-Shift (\u2191\u2191) toggles ON/OFF"
 
@@ -660,6 +661,7 @@ class GlobalNufiWindowsKeyboard:
     def _replace_visible_text(self, source_visible: str, replacement_visible: str) -> None:
         import keyboard
 
+        self.recent_shift_release_time = 0.0
         self.handling_injection = True
         try:
             for _ in range(len(source_visible)):
@@ -903,11 +905,18 @@ class GlobalNufiWindowsKeyboard:
             self._schedule_suggestion_fetch()
 
     def _handle_double_shift_toggle(self, event) -> None:
+        if self.handling_injection:
+            return
+        now = time.monotonic()
+        if event.event_type == "down" and self._is_shift_event(event):
+            self._last_shift_down_time = now
+            return
         if event.event_type != "up":
             return
         if not self._is_shift_event(event):
             return
-        now = time.monotonic()
+        if now - self._last_shift_down_time > 0.35:
+            return
         if now - self.recent_shift_release_time <= TOGGLE_WINDOW_SECONDS:
             with self.lock:
                 self._toggle_enabled()
@@ -1043,7 +1052,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--live-transform",
         action="store_true",
-        help="Experimental mode: rewrite the active shortcut as you type.",
+        default=True,
+        help="Rewrite the active shortcut as you type.",
+    )
+    parser.add_argument(
+        "--stable-transform",
+        dest="live_transform",
+        action="store_false",
+        help="Use the old finalize-on-space behavior.",
     )
     return parser.parse_args(argv)
 
