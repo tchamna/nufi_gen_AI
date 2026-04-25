@@ -594,6 +594,14 @@ const applyLiveClafricaMappingToTrailingToken = (token: string): string => {
     return token;
   }
 
+  const canonical = resolveClafricaKey(token);
+  if (canonical) {
+    if (AMBIGUOUS_CLAFRICA_KEYS.has(canonical)) {
+      return token;
+    }
+    return Clafrica[canonical];
+  }
+
   const exactTrailingKey = getLongestTrailingExactKey(token);
   const exactCanonical = exactTrailingKey ? resolveClafricaKey(exactTrailingKey) : null;
   if (exactTrailingKey && exactCanonical && !AMBIGUOUS_CLAFRICA_KEYS.has(exactCanonical)) {

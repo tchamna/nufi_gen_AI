@@ -24,6 +24,7 @@ MAPVK_VSC_TO_VK_EX = 3
 LOCK_PATH = str(Path(tempfile.gettempdir()) / "ClafricaPlus.lock")
 LOG_PATH = str(Path(tempfile.gettempdir()) / "ClafricaPlus.log")
 TOGGLE_WINDOW_SECONDS = 0.35
+POST_INJECTION_TOGGLE_GUARD_SECONDS = 0.75
 SHIFT_KEYS = {"shift", "left shift", "right shift"}
 SHIFT_SCAN_CODES = {42, 54}
 MODIFIER_KEYS = {
@@ -269,6 +270,9 @@ class PredictionClient:
         ]
 
 
+_RESULAM_LOGO_PATH = r"G:\My Drive\Resulam\AI_Resulam\AI Background Resulam Nufi Bamileke Ndop Collection For NFT\resulam_logo_egg.png"
+
+
 class SuggestionOverlay:
     def __init__(self, on_select: Callable[[int], None], on_quit: Callable[[], None]) -> None:
         import tkinter as tk
@@ -292,11 +296,29 @@ class SuggestionOverlay:
         self._manual_position: tuple[int, int] | None = None
         self._drag_offset: tuple[int, int] | None = None
         self._mode_label = "Clafrica+"
+        self._logo_image = None  # keep reference to prevent GC
 
         self._frame = tk.Frame(self.root, bg="#101216", padx=8, pady=8)
         self._frame.pack(fill="both", expand=True)
         self._header = tk.Frame(self._frame, bg="#101216")
         self._header.pack(fill="x")
+
+        # Logo (left side of header) — loaded with Pillow so we can resize it
+        try:
+            from PIL import Image, ImageTk
+            img = Image.open(_RESULAM_LOGO_PATH).convert("RGBA")
+            img.thumbnail((32, 32), Image.LANCZOS)
+            self._logo_image = ImageTk.PhotoImage(img)
+            self._logo_label = tk.Label(
+                self._header,
+                image=self._logo_image,
+                bg="#101216",
+                bd=0,
+            )
+            self._logo_label.pack(side="left", padx=(0, 6))
+        except Exception:
+            self._logo_label = None
+
         self._status = tk.Label(
             self._header,
             textvariable=self._status_var,
@@ -335,7 +357,7 @@ class SuggestionOverlay:
         self._hint = tk.Label(
             self._frame,
             textvariable=self._hint_var,
-            fg="#9fb0c4",
+            fg="#ffd700",
             bg="#101216",
             anchor="w",
             justify="left",
@@ -345,7 +367,20 @@ class SuggestionOverlay:
         self._hint.pack(fill="x", pady=(4, 0))
         self._button_row = tk.Frame(self._frame, bg="#101216")
         self._button_row.pack(fill="x", pady=(6, 0))
-        for widget in (self._header, self._status, self._hint, self._state):
+        self._footer = tk.Label(
+            self._frame,
+            text="Developed by Resulam: www.resulam.com",
+            fg="#ffffff",
+            bg="#101216",
+            anchor="e",
+            justify="right",
+            font=("Segoe UI", 9),
+        )
+        self._footer.pack(fill="x", pady=(4, 0))
+        draggable = [self._header, self._status, self._hint, self._state, self._footer]
+        if self._logo_label is not None:
+            draggable.append(self._logo_label)
+        for widget in draggable:
             widget.bind("<ButtonPress-1>", self._start_drag)
             widget.bind("<B1-Motion>", self._drag_window)
             widget.bind("<ButtonRelease-1>", self._end_drag)
@@ -575,6 +610,7 @@ class GlobalNufiWindowsKeyboard:
         self.fetch_timer: threading.Timer | None = None
         self._mouse_down = False
         self._last_shift_down_time = 0.0
+        self._suppress_toggle_until = 0.0
 
     @staticmethod
     def _is_shift_event(event) -> bool:
@@ -662,6 +698,7 @@ class GlobalNufiWindowsKeyboard:
         import keyboard
 
         self.recent_shift_release_time = 0.0
+        self._suppress_toggle_until = time.monotonic() + POST_INJECTION_TOGGLE_GUARD_SECONDS
         self.handling_injection = True
         try:
             for _ in range(len(source_visible)):
@@ -737,7 +774,15 @@ class GlobalNufiWindowsKeyboard:
         if combined_raw.endswith(("'", "’")):
             index = int(digit_text) - 1
             return index < len(self.latest_suggestions)
-        if combined_raw and self.engine.would_transform_with_appended_text(combined_raw, digit_text):
+        # In live-transform mode the displayed text already differs from
+        # the raw token (e.g. n2 renders to tone char). Use visible text
+        # so a following digit like 1 is not blocked as a transform key.
+        check_text = (
+            self.displayed_active_text
+            if self.live_transform and self.displayed_active_text
+            else combined_raw
+        )
+        if check_text and self.engine.would_transform_with_appended_text(check_text, digit_text):
             return False
 
         index = int(digit_text) - 1
@@ -856,6 +901,7 @@ class GlobalNufiWindowsKeyboard:
         time.sleep(0.05)
         with self.lock:
             if remove_typed_digit:
+                self._suppress_toggle_until = time.monotonic() + POST_INJECTION_TOGGLE_GUARD_SECONDS
                 self.handling_injection = True
                 try:
                     import keyboard
@@ -878,6 +924,7 @@ class GlobalNufiWindowsKeyboard:
             else:
                 needs_space = bool(self.committed_context and not self.committed_context[-1].isspace())
                 insertion = f"{' ' if needs_space else ''}{suggestion.word} "
+                self._suppress_toggle_until = time.monotonic() + POST_INJECTION_TOGGLE_GUARD_SECONDS
                 self.handling_injection = True
                 try:
                     import keyboard
@@ -905,9 +952,9 @@ class GlobalNufiWindowsKeyboard:
             self._schedule_suggestion_fetch()
 
     def _handle_double_shift_toggle(self, event) -> None:
-        if self.handling_injection:
-            return
         now = time.monotonic()
+        if self.handling_injection or now < self._suppress_toggle_until:
+            return
         if event.event_type == "down" and self._is_shift_event(event):
             self._last_shift_down_time = now
             return

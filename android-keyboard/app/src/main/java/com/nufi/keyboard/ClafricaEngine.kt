@@ -22,6 +22,7 @@ class ClafricaEngine(context: Context) {
     private val phraseMap: Map<String, String>
     private val calendarMap: Map<String, String>
     private val compositionalKeysSorted: List<String>
+    private val exactKeysSorted: List<String>
     private val phrasePatternsSorted: List<Pair<Regex, String>>
     private val ambiguousKeys: Set<String>
     private val calendarPattern = Regex("(?<![\\p{L}\\p{N}])(\\d{1,2})([ -])(\\d{1,2})\\2(\\d{4})(?![\\p{L}\\p{N}])")
@@ -54,13 +55,14 @@ class ClafricaEngine(context: Context) {
         phraseMap = phraseEntries
         calendarMap = loadJsonAsset(context, "nufi_calendar.json")
         compositionalKeysSorted = clafricaTokenMap.keys.sortedWith(compareBy<String> { -it.length }.thenBy { it })
+        exactKeysSorted = exactTokenMap.keys.sortedWith(compareBy<String> { -it.length }.thenBy { it })
         phrasePatternsSorted = phraseMap.keys
             .sortedWith(compareBy<String> { -it.length }.thenBy { it })
             .map { key ->
                 Regex("(?<![\\p{L}\\p{N}])${Regex.escape(key)}(?![\\p{L}\\p{N}])") to phraseMap.getValue(key)
             }
-        ambiguousKeys = compositionalKeysSorted.filter { key ->
-            compositionalKeysSorted.any { other -> other.length > key.length && other.startsWith(key) }
+        ambiguousKeys = exactKeysSorted.filter { key ->
+            exactKeysSorted.any { other -> other.length > key.length && other.startsWith(key) }
         }.toSet()
     }
 
@@ -339,9 +341,8 @@ class ClafricaEngine(context: Context) {
         if (token.isEmpty()) return token
 
         resolveExactTokenKey(token)?.let { canonical ->
-            if (canonical !in ambiguousKeys || canonical == token) {
-                return mappedValueForCanonicalKey(canonical)!!
-            }
+            if (canonical in ambiguousKeys) return token
+            return mappedValueForCanonicalKey(canonical)!!
         }
 
         val exactTrailingKey = getLongestTrailingExactKey(token)
