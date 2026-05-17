@@ -3,7 +3,7 @@
 
 a = Analysis(
     ['run_nufi_windows_keyboard_customizable.py'],
-    pathex=[],
+    pathex=['.'],
     binaries=[],
     datas=[('..\\android-keyboard\\app\\src\\main\\assets\\clafrica.json', 'android-keyboard\\app\\src\\main\\assets'), ('..\\android-keyboard\\app\\src\\main\\assets\\nufi_sms.json', 'android-keyboard\\app\\src\\main\\assets'), ('..\\android-keyboard\\app\\src\\main\\assets\\nufi_calendar.json', 'android-keyboard\\app\\src\\main\\assets')],
     hiddenimports=[],

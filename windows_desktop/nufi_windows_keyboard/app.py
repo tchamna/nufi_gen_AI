@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Callable
 
 import requests
+import tkinter as tk
 
 from .custom_shortcuts import (
     ShortcutFileError,
@@ -30,6 +31,16 @@ from .engine import NufiTransformEngine, ShortcutHint
 
 
 USER32 = ctypes.windll.user32
+GWL_EXSTYLE = -20
+WS_EX_TOOLWINDOW = 0x00000080
+WS_EX_APPWINDOW = 0x00040000
+SWP_NOMOVE = 0x0002
+SWP_NOSIZE = 0x0001
+SWP_NOZORDER = 0x0004
+SWP_FRAMECHANGED = 0x0020
+GA_ROOT = 2
+WM_SYSCOMMAND = 0x0112
+SC_MINIMIZE = 0xF020
 MAPVK_VSC_TO_VK_EX = 3
 LOCK_PATH = str(Path(tempfile.gettempdir()) / "ClafricaPlus.lock")
 LOG_PATH = str(Path(tempfile.gettempdir()) / "ClafricaPlus.log")
@@ -127,6 +138,7 @@ UI_TEXTS = {
             "Appuyez sur Ctrl+Alt+S pour corriger : {error}"
         ),
         "app_description": "Clavier Windows Clafrica+",
+        "hide_window": "Masquer",
         "mode_live_default": "Clafrica+",
         "mode_stable_default": "Clafrica+ Stable",
         "mode_live_custom": "Clafrica+ Personnalisable",
@@ -174,6 +186,7 @@ UI_TEXTS = {
             "{mode_label} loaded default shortcuts. Press Ctrl+Alt+S to fix: {error}"
         ),
         "app_description": "Clafrica+ Windows desktop keyboard",
+        "hide_window": "Hide",
         "mode_live_default": "Clafrica+",
         "mode_stable_default": "Clafrica+ Stable",
         "mode_live_custom": "Clafrica+ Custom",
@@ -185,6 +198,65 @@ UI_TEXTS = {
 def tr(language: str, key: str, **kwargs: object) -> str:
     text = UI_TEXTS.get(language, UI_TEXTS["en"])[key]
     return text.format(**kwargs) if kwargs else text
+
+
+def w32_resolve_toplevel_hwnd(tk_winfo_id: int) -> int:
+    """ Tk winfo_id() is often a child; taskbar/ minimize need the real toplevel HWND. """
+    if not tk_winfo_id:
+        return 0
+    h = int(tk_winfo_id)
+    try:
+        r = int(USER32.GetAncestor(h, GA_ROOT))  # type: ignore[arg-type]
+        if r:
+            return r
+    except (OSError, ValueError, ctypes.ArgumentError, AttributeError, TypeError):
+        pass
+    for _ in range(24):
+        try:
+            p = int(USER32.GetParent(h))  # type: ignore[arg-type]
+        except (OSError, ValueError, ctypes.ArgumentError, AttributeError, TypeError):
+            break
+        if not p:
+            return h
+        h = p
+    return h
+
+
+def w32_show_window_in_taskbar(hwnd: int) -> None:
+    """Force a taskbar button (WS_EX_APPWINDOW) on this HWND. Safe to call more than once."""
+    if not hwnd:
+        return
+    try:
+        if hasattr(USER32, "GetWindowLongPtrW"):
+            ex = USER32.GetWindowLongPtrW(hwnd, GWL_EXSTYLE)
+            ex = (ex & ~WS_EX_TOOLWINDOW) | WS_EX_APPWINDOW
+            USER32.SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex)
+        else:
+            ex = USER32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+            ex = (ex & ~WS_EX_TOOLWINDOW) | WS_EX_APPWINDOW
+            USER32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex)
+        USER32.SetWindowPos(
+            hwnd,
+            0,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED,
+        )
+    except (OSError, ValueError, ctypes.ArgumentError, AttributeError, TypeError):
+        pass
+
+
+def w32_minimize_to_taskbar(hwnd: int) -> bool:
+    """SC_MINIMIZE on the toplevel; works more reliably than iconify() for borderless Tk."""
+    if not hwnd:
+        return False
+    try:
+        USER32.SendMessageW(hwnd, WM_SYSCOMMAND, SC_MINIMIZE, 0)
+        return True
+    except (OSError, ValueError, ctypes.ArgumentError, AttributeError, TypeError):
+        return False
 
 
 def acquire_single_instance_lock() -> None:
@@ -398,6 +470,7 @@ class SuggestionOverlay:
         on_toggle: Callable[[], None] | None = None,
         on_edit_shortcuts: Callable[[], None] | None = None,
         on_toggle_language: Callable[[], None] | None = None,
+        on_toggle_date_mode: Callable[[], None] | None = None,
         language: str = "fr",
     ) -> None:
         import tkinter as tk
@@ -420,7 +493,11 @@ class SuggestionOverlay:
         self._on_toggle = on_toggle
         self._on_edit_shortcuts = on_edit_shortcuts
         self._on_toggle_language = on_toggle_language
+        self._on_toggle_date_mode = on_toggle_date_mode
+        self._date_mode_active = False
         self._enabled = True
+        self._user_withdrew: bool = False
+        self._taskbar_style_applied: bool = False
         self._anchor_hwnd: int | None = None
         self._manual_position: tuple[int, int] | None = None
         self._drag_offset: tuple[int, int] | None = None
@@ -433,14 +510,24 @@ class SuggestionOverlay:
         self._header = tk.Frame(self._frame, bg="#101216")
         self._header.pack(fill="x")
 
-        # Logo (left side of header) — loaded with Pillow so we can resize it
+        _tpad = 5
+        _ipad = 8
+        _tbg = "#0d1117"
+        _tline = "#242b38"
+        _font_btn = ("Segoe UI", 9)
+        _font_btn_b = ("Segoe UI", 9, "bold")
+
+        self._row_title = tk.Frame(self._header, bg="#101216")
+        self._row_title.pack(fill="x")
+
+        # Logo (left side of title row) — loaded with Pillow so we can resize it
         try:
             from PIL import Image, ImageTk
             img = Image.open(_RESULAM_LOGO_PATH).convert("RGBA")
             img.thumbnail((32, 32), Image.LANCZOS)
             self._logo_image = ImageTk.PhotoImage(img)
             self._logo_label = tk.Label(
-                self._header,
+                self._row_title,
                 image=self._logo_image,
                 bg="#101216",
                 bd=0,
@@ -450,73 +537,129 @@ class SuggestionOverlay:
             self._logo_label = None
 
         self._status = tk.Label(
-            self._header,
+            self._row_title,
             textvariable=self._status_var,
             fg="#d7dde8",
             bg="#101216",
             anchor="w",
             justify="left",
-            font=("Segoe UI", 14),
+            font=("Segoe UI", 11),
+            wraplength=420,
         )
         self._status.pack(side="left", fill="x", expand=True)
+
+        # Single toolbar row: primary actions left, window actions right (IDE / status-bar style)
+        self._row_actions = tk.Frame(self._header, bg="#101216")
+        self._row_actions.pack(fill="x", pady=(6, 0))
+        self._toolbar = tk.Frame(
+            self._row_actions,
+            bg=_tbg,
+            highlightthickness=1,
+            highlightbackground=_tline,
+        )
+        self._toolbar.pack(fill="x")
+        self._toolbar.grid_columnconfigure(1, minsize=12, weight=1)
+
+        self._toolbar_left = tk.Frame(self._toolbar, bg=_tbg)
+        self._toolbar_left.grid(row=0, column=0, sticky="w", padx=(6, 4), pady=3)
+        self._toolbar_spacer = tk.Frame(self._toolbar, bg=_tbg, height=1, cursor="fleur")
+        self._toolbar_spacer.grid(row=0, column=1, sticky="nsew", pady=3)
+        self._toolbar_right = tk.Frame(self._toolbar, bg=_tbg)
+        self._toolbar_right.grid(row=0, column=2, sticky="e", padx=(4, 6), pady=3)
+
         self._state = tk.Label(
-            self._header,
+            self._toolbar_left,
             textvariable=self._state_var,
             fg="#ffffff",
             bg="#2a7a41",
-            padx=8,
-            pady=4,
-            font=("Segoe UI", 11, "bold"),
+            padx=_ipad,
+            pady=_tpad,
+            font=_font_btn_b,
         )
-        self._exit_button = tk.Button(
-            self._header,
-            text=tr(self._language, "exit"),
-            command=self._on_quit,
-            bg="#8b2d2f",
-            fg="#ffffff",
-            activebackground="#a43a3d",
-            activeforeground="#ffffff",
-            relief="flat",
-            bd=0,
-            padx=10,
-            pady=4,
-            font=("Segoe UI", 10, "bold"),
-        )
-        self._exit_button.pack(side="right")
-        self._language_button = tk.Button(
-            self._header,
-            text=tr(self._language, "language_toggle"),
-            command=self._handle_language_click,
-            bg="#1d232d",
-            fg="#f3f5f8",
-            activebackground="#2b3340",
-            activeforeground="#ffffff",
-            relief="flat",
-            bd=0,
-            padx=10,
-            pady=4,
-            font=("Segoe UI", 10, "bold"),
-        )
-        self._language_button.pack(side="right", padx=(0, 6))
+        self._state.pack(side="left", padx=(0, 4))
+        self._state.bind("<ButtonRelease-1>", self._handle_state_click)
+        self._state.configure(cursor="hand2")
+
         if self._on_edit_shortcuts is not None:
             self._edit_button = tk.Button(
-                self._header,
+                self._toolbar_left,
                 text=tr(self._language, "shortcuts"),
                 command=self._on_edit_shortcuts,
                 bg="#1d232d",
-                fg="#f3f5f8",
-                activebackground="#2b3340",
+                fg="#e8eaed",
+                activebackground="#2a3340",
                 activeforeground="#ffffff",
                 relief="flat",
                 bd=0,
-                padx=10,
-                pady=4,
-                font=("Segoe UI", 10, "bold"),
+                padx=_ipad,
+                pady=_tpad,
+                font=_font_btn,
             )
-            self._edit_button.pack(side="right", padx=(0, 6))
-        self._state.pack(side="right", padx=(0, 6))
-        self._state.bind("<ButtonRelease-1>", self._handle_state_click)
-        self._state.configure(cursor="hand2")
+            self._edit_button.pack(side="left", padx=(0, 4))
+
+        self._language_button = tk.Button(
+            self._toolbar_left,
+            text=tr(self._language, "language_toggle"),
+            command=self._handle_language_click,
+            bg="#1d232d",
+            fg="#e8eaed",
+            activebackground="#2a3340",
+            activeforeground="#ffffff",
+            relief="flat",
+            bd=0,
+            padx=_ipad,
+            pady=_tpad,
+            font=_font_btn,
+        )
+        self._language_button.pack(side="left", padx=(0, 4))
+
+        self._date_button = tk.Button(
+            self._toolbar_left,
+            text="Date",
+            command=self._handle_date_mode_click,
+            bg="#1d232d",
+            fg="#e8eaed",
+            activebackground="#2a3340",
+            activeforeground="#ffffff",
+            relief="flat",
+            bd=0,
+            padx=_ipad,
+            pady=_tpad,
+            font=_font_btn,
+            cursor="hand2",
+        )
+        self._date_button.pack(side="left", padx=(0, 4))
+
+        self._hide_button = tk.Button(
+            self._toolbar_right,
+            text=tr(self._language, "hide_window"),
+            command=self._user_hide_window,
+            bg="#2d3d52",
+            fg="#e8eaed",
+            activebackground="#3d4d66",
+            activeforeground="#ffffff",
+            relief="flat",
+            bd=0,
+            padx=_ipad,
+            pady=_tpad,
+            font=_font_btn,
+        )
+        self._hide_button.pack(side="left", padx=(0, 4))
+        self._exit_button = tk.Button(
+            self._toolbar_right,
+            text=tr(self._language, "exit"),
+            command=self._on_quit,
+            bg="#7a2a2c",
+            fg="#ffffff",
+            activebackground="#963336",
+            activeforeground="#ffffff",
+            relief="flat",
+            bd=0,
+            padx=_ipad,
+            pady=_tpad,
+            font=_font_btn_b,
+        )
+        self._exit_button.pack(side="left", padx=(0, 0))
         self._hint = tk.Label(
             self._frame,
             textvariable=self._hint_var,
@@ -525,7 +668,7 @@ class SuggestionOverlay:
             anchor="w",
             justify="left",
             font=("Segoe UI", 11),
-            wraplength=1100,
+            wraplength=420,
         )
         self._hint.pack(fill="x", pady=(4, 0))
         self._button_row = tk.Frame(self._frame, bg="#101216")
@@ -540,13 +683,23 @@ class SuggestionOverlay:
             font=("Segoe UI", 9),
         )
         self._footer.pack(fill="x", pady=(4, 0))
-        draggable = [self._header, self._status, self._hint, self._state, self._footer]
+        draggable = [
+            self._header,
+            self._row_title,
+            self._status,
+            self._row_actions,
+            self._toolbar,
+            self._toolbar_spacer,
+            self._hint,
+            self._footer,
+        ]
         if self._logo_label is not None:
             draggable.append(self._logo_label)
         for widget in draggable:
             widget.bind("<ButtonPress-1>", self._start_drag)
             widget.bind("<B1-Motion>", self._drag_window)
             widget.bind("<ButtonRelease-1>", self._end_drag)
+        self.root.bind("<Map>", self._on_window_map, add="+")
         self.root.after(50, self._poll)
 
     @staticmethod
@@ -571,12 +724,16 @@ class SuggestionOverlay:
                 break
             if action == "hide":
                 self._render_idle(payload)
+            elif action == "withdraw":
+                self._minimize_to_taskbar()
             elif action == "status":
                 self._render_status(str(payload))
             elif action == "state":
                 self._set_state(bool(payload))
             elif action == "language":
                 self._apply_language(str(payload))
+            elif action == "date_mode":
+                self._set_date_mode(bool(payload))
             elif action == "mode_label":
                 self._mode_label = str(payload)
             elif action == "shortcut_hints":
@@ -662,9 +819,88 @@ class SuggestionOverlay:
         if self._on_toggle_language is not None:
             self._on_toggle_language()
 
+    def _handle_date_mode_click(self) -> None:
+        if self._on_toggle_date_mode is not None:
+            self._on_toggle_date_mode()
+
+    def _set_date_mode(self, active: bool) -> None:
+        self._date_mode_active = active
+        self._date_button.configure(
+            bg="#1d5c7a" if active else "#1d232d",
+            fg="#ffd700" if active else "#e8eaed",
+        )
+
+    def set_date_mode(self, active: bool) -> None:
+        self._queue.put(("date_mode", active))
+
+    def _user_hide_window(self) -> None:
+        self._queue.put(("withdraw", None))
+
+    def _apply_taskbar_win32(self) -> tuple[int, int]:
+        """Return (winfo_id, resolved_toplevel_hwnd). Both get WS_EX_APPWINDOW where needed."""
+        self.root.update_idletasks()
+        raw = int(self.root.winfo_id())
+        if not raw:
+            return 0, 0
+        top = w32_resolve_toplevel_hwnd(raw)
+        if not top:
+            top = raw
+        for h in (raw, top):
+            if h:
+                w32_show_window_in_taskbar(h)
+        return raw, top
+
+    def _ensure_taskbar_style(self) -> None:
+        if self._taskbar_style_applied:
+            return
+        try:
+            raw, _top = self._apply_taskbar_win32()
+            if raw or _top:
+                self._taskbar_style_applied = True
+        except (OSError, ValueError, RuntimeError, tk.TclError):
+            pass
+
+    def _on_window_map(self, _event=None) -> None:
+        def _apply() -> None:
+            try:
+                st = str(self.root.wm_state() or "")
+                if self._user_withdrew and st in ("normal", "zoomed"):
+                    self._user_withdrew = False
+            except (RuntimeError, tk.TclError):
+                pass
+
+        try:
+            self.root.after_idle(_apply)
+        except (RuntimeError, tk.TclError):
+            pass
+
+    def _minimize_to_taskbar(self) -> None:
+        self._user_withdrew = True
+        try:
+            raw, top = self._apply_taskbar_win32()
+            self._taskbar_style_applied = bool(raw or top)
+            try:
+                self.root.attributes("-toolwindow", False)
+            except (tk.TclError, ValueError):
+                pass
+            _done = False
+            for hwnd in (top, raw):
+                if not hwnd or _done:
+                    continue
+                if w32_minimize_to_taskbar(hwnd):
+                    _done = True
+            if not _done:
+                self.root.iconify()
+        except (OSError, RuntimeError, ValueError, tk.TclError):
+            try:
+                self.root.withdraw()
+            except (RuntimeError, tk.TclError):
+                pass
+
     def _apply_language(self, language: str) -> None:
         self._language = language
         self._exit_button.configure(text=tr(language, "exit"))
+        self._hide_button.configure(text=tr(language, "hide_window"))
         self._language_button.configure(text=tr(language, "language_toggle"))
         if hasattr(self, "_edit_button"):
             self._edit_button.configure(text=tr(language, "shortcuts"))
@@ -697,8 +933,10 @@ class SuggestionOverlay:
             if self._enabled
             else f"{self._mode_label} {tr(self._language, 'off')}  |  {tr(self._language, 'toggle_hint')}"
         )
-        self._set_position(hwnd)
-        self.root.deiconify()
+        if not self._user_withdrew:
+            self._ensure_taskbar_style()
+            self._set_position(hwnd)
+            self.root.deiconify()
 
     def _render_status(self, message: str) -> None:
         self._anchor_hwnd = None
@@ -708,6 +946,8 @@ class SuggestionOverlay:
         self._button_row.pack_forget()
         self._status_var.set(message)
         if message:
+            self._user_withdrew = False
+            self._ensure_taskbar_style()
             self._set_position(None)
             self.root.deiconify()
         else:
@@ -740,6 +980,8 @@ class SuggestionOverlay:
             )
             button.pack(side="left", padx=(0, 6))
             self._buttons.append(button)
+        self._user_withdrew = False
+        self._ensure_taskbar_style()
         self._set_position(hwnd)
         self.root.deiconify()
 
@@ -1087,12 +1329,14 @@ class GlobalNufiWindowsKeyboard:
         self.quit_requested = threading.Event()
         self.handling_injection = False
         self.lock = threading.RLock()
+        self.date_mode = False
         self.overlay = SuggestionOverlay(
             self.select_suggestion,
             self.quit_requested.set,
             self._toggle_enabled,
             self.open_shortcut_editor if self.allow_shortcut_editing else None,
             self._toggle_ui_language,
+            self._toggle_date_mode,
             self.ui_language,
         )
         self.overlay.set_mode_label(self.mode_label)
@@ -1249,6 +1493,16 @@ class GlobalNufiWindowsKeyboard:
             self.overlay.root.after(0, lambda: self.shortcut_editor.set_language(self.ui_language))
         self._refresh_language_view()
 
+    def _toggle_date_mode(self) -> None:
+        self.date_mode = not self.date_mode
+        self.overlay.set_date_mode(self.date_mode)
+        if self.date_mode:
+            with self.lock:
+                self.latest_suggestions = []
+            self.overlay.hide(self.active_hwnd)
+        else:
+            self._schedule_suggestion_fetch()
+
     def _refresh_language_view(self) -> None:
         self._update_shortcut_hints()
         if self.shortcut_load_error:
@@ -1361,7 +1615,7 @@ class GlobalNufiWindowsKeyboard:
             return False
 
         combined_raw = self.pending_phrase_raw + self.raw_token
-        if combined_raw.endswith(("'", "’")):
+        if combined_raw.endswith(("’", "’")):
             index = int(digit_text) - 1
             return index < len(self.latest_suggestions)
         # In live-transform mode the displayed text already differs from
@@ -1379,7 +1633,7 @@ class GlobalNufiWindowsKeyboard:
         return index < len(self.latest_suggestions)
 
     def _schedule_suggestion_fetch(self) -> None:
-        if not self.enabled:
+        if not self.enabled or self.date_mode:
             self.overlay.hide(self.active_hwnd)
             return
         query = self._visible_query_text()
@@ -1421,7 +1675,10 @@ class GlobalNufiWindowsKeyboard:
     def _finalize_current_token_with_delimiter(self, delimiter_visible: str) -> None:
         combined_raw = self.pending_phrase_raw + self.raw_token
 
-        if delimiter_visible.isspace() and self._is_phrase_prefix(combined_raw + delimiter_visible):
+        if delimiter_visible.isspace() and (
+            self._is_phrase_prefix(combined_raw + delimiter_visible)
+            or self.engine.is_potential_date_prefix(combined_raw + delimiter_visible)
+        ):
             source_visible = self._visible_active_text() + delimiter_visible
             self.pending_phrase_raw += self.raw_token + delimiter_visible
             self.raw_token = ""

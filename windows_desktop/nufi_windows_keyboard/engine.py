@@ -65,6 +65,7 @@ class NufiTransformEngine:
             "waha*": DynamicDateAlias(1, "Wāhá imbɑ̄"),
         }
         self.calendar_pattern = re.compile(r"(?<![\w])(\d{1,2})([ -])(\d{1,2})\2(\d{4})(?![\w])")
+        self._date_space_prefix_re = re.compile(r"^\d{1,2} (?:\d{1,2} )?$")
 
         self.clafrica_token_map: dict[str, str] = {}
         self.exact_token_map: dict[str, str] = {}
@@ -110,6 +111,10 @@ class NufiTransformEngine:
             ),
             key=lambda item: (len(item), item.lower(), item),
         )
+
+    def is_potential_date_prefix(self, text: str) -> bool:
+        """Return True if text could be the start of a space-separated date (dd mm yyyy)."""
+        return bool(self._date_space_prefix_re.match(text))
 
     def _load_json_asset(self, name: str) -> dict[str, str]:
         with (self.asset_root / name).open("r", encoding="utf-8") as handle:
