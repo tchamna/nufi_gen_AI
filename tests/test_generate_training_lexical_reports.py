@@ -36,6 +36,35 @@ def test_is_alpha_word_token():
     assert reports._is_alpha_word_token("co") is True
 
 
+def test_count_unicode_letters_ignores_combining_marks():
+    assert reports.count_unicode_letters("mɑ́") == 2
+    assert reports.count_unicode_letters("ntúmbō") == 6
+    assert reports.count_unicode_letters("ngǔ'") == 3
+
+
+def test_frequent_alpha_words_by_min_letters():
+    from collections import Counter
+
+    alpha_counts = Counter(
+        {
+            "mɑ́": 40,
+            "kɑ́": 30,
+            "ntúmbō": 25,
+            "ngǔ'": 22,
+            "co": 20,
+            "lī": 15,
+        }
+    )
+
+    payload = reports.frequent_alpha_words_by_min_letters(alpha_counts, min_letters=3, limit=100)
+
+    assert payload["matching_unique_words"] == 2
+    assert [item["word"] for item in payload["words"]] == ["ntúmbō", "ngǔ'"]
+    assert payload["words"][0]["letter_count"] == 6
+    assert payload["words"][1]["letter_count"] == 3
+    assert all(item["letter_count"] >= 3 for item in payload["words"])
+
+
 def test_iter_filtered_tokens_uses_rhs_of_assignment_lines():
     sentence_sources = {
         "almk = ǎ lén mɑ́ kɑ́": [{"path": "a.txt", "type": "txt", "reference": "line 1"}],

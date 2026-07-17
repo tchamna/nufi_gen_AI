@@ -9,7 +9,7 @@ from io import BytesIO
 from pathlib import Path
 import unicodedata
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.responses import HTMLResponse
@@ -548,6 +548,27 @@ def api_audio_get(word: str, audio_id: str | None = None):
     )
 
 
+@app.get("/api/stats/frequent-words")
+def api_stats_frequent_words(
+    min_letters: int = Query(default=3, ge=1, le=32),
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    alpha_counts = LEXICAL_STATS.get("alpha_counts")
+    if not alpha_counts:
+        raise HTTPException(status_code=503, detail="lexical stats not loaded")
+
+    payload = tlr.frequent_alpha_words_by_min_letters(
+        alpha_counts,
+        min_letters=min_letters,
+        limit=limit,
+    )
+    return {
+        "total_alpha_tokens": LEXICAL_STATS["total_alpha_tokens"],
+        "unique_alpha_word_count": len(LEXICAL_STATS["unique_alpha_words"]),
+        **payload,
+    }
+
+
 @app.get("/api/stats/lexical")
 def api_stats_lexical():
     top_words = []
@@ -591,6 +612,15 @@ def index():
     if html_path.exists():
         return HTMLResponse(html_path.read_text(encoding="utf-8"))
     return {"status": "ok", "message": "Put a static/index.html file to serve the frontend."}
+
+
+@app.get("/frequent-words")
+@app.get("/freq")
+def frequent_words_page():
+    html_path = BASE_DIR / "static" / "frequent-words.html"
+    if html_path.exists():
+        return HTMLResponse(html_path.read_text(encoding="utf-8"))
+    raise HTTPException(status_code=404, detail="frequent words page not found")
 
 
 @app.get("/stats")

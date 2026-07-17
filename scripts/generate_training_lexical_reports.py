@@ -66,6 +66,40 @@ def _is_numeric_or_pointer_token(token: str) -> bool:
     return saw_digit
 
 
+def count_unicode_letters(word: str) -> int:
+    """Count Unicode letters; combining tone marks (Mn) are not letters."""
+    return sum(1 for ch in word if unicodedata.category(ch).startswith("L"))
+
+
+def frequent_alpha_words_by_min_letters(
+    alpha_counts: Counter[str],
+    min_letters: int = 1,
+    limit: int = 100,
+) -> dict[str, object]:
+    filtered = [
+        (word, count)
+        for word, count in alpha_counts.items()
+        if count_unicode_letters(word) >= min_letters
+    ]
+    filtered.sort(key=lambda item: (-item[1], item[0]))
+    ranked = filtered[:limit]
+    return {
+        "min_letters": min_letters,
+        "limit": limit,
+        "matching_unique_words": len(filtered),
+        "returned": len(ranked),
+        "words": [
+            {
+                "rank": index + 1,
+                "word": word,
+                "count": count,
+                "letter_count": count_unicode_letters(word),
+            }
+            for index, (word, count) in enumerate(ranked)
+        ],
+    }
+
+
 def _is_alpha_word_token(token: str) -> bool:
     saw_letter = False
     for ch in token:
@@ -153,6 +187,7 @@ def build_lexical_report_data(
         "total_alpha_tokens": len(alpha_tokens),
         "unique_words": unique_words,
         "unique_alpha_words": unique_alpha_words,
+        "alpha_counts": alpha_counts,
         "top_words": _format_top(counts, top_limit),
         "top_alpha_words": _format_top(alpha_counts, top_limit),
         "top_alpha_preview": _format_top(alpha_counts, preview_limit),

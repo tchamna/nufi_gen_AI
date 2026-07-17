@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nufi Frequent Words</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: system-ui, Segoe UI, Arial, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        padding: 16px;
+        background: #f5f5f2;
+        color: #161616;
+      }
+
+      main {
+        max-width: 900px;
+        margin: 0 auto;
+      }
+
+      .nav {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
+      }
+
+      .nav a {
+        color: #0f5d44;
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      .nav a:hover {
+        text-decoration: underline;
+      }
+
+      .band {
+        background: #fff;
+        border: 1px solid #d8d8d2;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 18px;
+      }
+
+      .band h1,
+      .band h2 {
+        margin: 0 0 12px;
+      }
+
+      .muted {
+        color: #5a5a52;
+        font-size: 14px;
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: end;
+        margin-top: 14px;
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      input[type="number"] {
+        width: 120px;
+        padding: 8px 10px;
+        border: 1px solid #c9c9c2;
+        border-radius: 6px;
+        font: inherit;
+      }
+
+      button {
+        padding: 9px 16px;
+        border: 0;
+        border-radius: 6px;
+        background: #0f8a63;
+        color: #fff;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: #0c7454;
+      }
+
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .metric {
+        border: 1px solid #d8d8d2;
+        background: #fff;
+        border-radius: 8px;
+        padding: 14px;
+      }
+
+      .metric .label {
+        font-size: 13px;
+        color: #5a5a52;
+        margin-bottom: 6px;
+      }
+
+      .metric .value {
+        font-size: 28px;
+        font-weight: 700;
+      }
+
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .table th,
+      .table td {
+        text-align: left;
+        padding: 8px 0;
+        border-bottom: 1px solid #ecece6;
+      }
+
+      .table th:last-child,
+      .table td:last-child {
+        text-align: right;
+      }
+
+      .bar-cell {
+        width: 100%;
+      }
+
+      .bar-wrap {
+        height: 8px;
+        background: #ecece6;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .bar {
+        height: 100%;
+        background: #0f8a63;
+      }
+
+      .status {
+        min-height: 20px;
+        font-size: 14px;
+      }
+
+      .error {
+        color: #9f1c22;
+      }
+
+      .word {
+        font-size: 18px;
+        color: #0f5d44;
+      }
+
+      .lookup-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid #b8ddd0;
+        background: #f3fbf7;
+        color: #0f5d44;
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+
+      .lookup-link:hover {
+        background: #e6f6ef;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <nav class="nav" aria-label="Primary">
+        <a href="/">Predictions</a>
+        <a href="/clean-nufi">Clean Nufi</a>
+        <a href="/stats">Word stats</a>
+        <a href="/frequent-words">Frequent words</a>
+        <a href="/date">Date</a>
+      </nav>
+
+      <section class="band">
+        <h1>Frequent Nufi words</h1>
+        <p class="muted">
+          Top words from the full training corpus, filtered by minimum Unicode letter count.
+          Tone marks are not counted as letters. Use <strong>Meaning</strong> to look up a word in
+          <a href="https://african-polyglot.com/dictionary" target="_blank" rel="noopener noreferrer">African Polyglot</a>.
+        </p>
+        <form id="controls" class="controls">
+          <label>
+            Minimum letters
+            <input id="min-letters" type="number" min="1" max="32" value="4" required />
+          </label>
+          <button type="submit">Show top 100</button>
+        </form>
+        <p id="status" class="status" aria-live="polite"></p>
+      </section>
+
+      <section id="summary" class="summary" aria-label="Summary stats"></section>
+
+      <section class="band">
+        <h2 id="results-title">Top words</h2>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Word</th>
+              <th>Letters</th>
+              <th>Count</th>
+              <th>Meaning</th>
+              <th class="bar-cell">Share</th>
+            </tr>
+          </thead>
+          <tbody id="words-body"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script type="module" src="/static/frequent-words.js"></script>
+  </body>
+</html>

@@ -262,6 +262,50 @@ def test_s3_audio_headers_normalize_last_modified_to_utc():
     assert headers["Last-Modified"] == "Sat, 18 Apr 2026 13:30:00 GMT"
 
 
+def test_frequent_words_endpoint_filters_by_min_letters(monkeypatch):
+    from collections import Counter
+
+    _stub_runtime(monkeypatch)
+    monkeypatch.setattr(
+        app.tlr,
+        "build_lexical_report_data",
+        lambda sentence_sources: {
+            "total_tokens": 120,
+            "total_alpha_tokens": 100,
+            "unique_words": ["mɑ́", "kɑ́", "ntúmbō"],
+            "unique_alpha_words": ["mɑ́", "kɑ́", "ntúmbō"],
+            "alpha_counts": Counter({"mɑ́": 40, "kɑ́": 30, "ntúmbō": 25, "co": 20}),
+            "top_words": ["mɑ́\t40"],
+            "top_alpha_words": ["mɑ́\t40"],
+            "top_alpha_preview": ["mɑ́\t40"],
+        },
+    )
+
+    with TestClient(app.app) as client:
+        response = client.get("/api/stats/frequent-words?min_letters=3&limit=2")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["matching_unique_words"] == 1
+    assert payload["words"] == [
+        {"rank": 1, "word": "ntúmbō", "count": 25, "letter_count": 6},
+    ]
+
+
+def test_frequent_words_page_route_serves_html(monkeypatch):
+    _stub_runtime(monkeypatch)
+
+    with TestClient(app.app) as client:
+        response = client.get("/frequent-words")
+        alias = client.get("/freq")
+
+    assert response.status_code == 200
+    assert alias.status_code == 200
+    assert "Frequent Nufi words" in response.text
+    assert "african-polyglot.com/dictionary" in response.text
+    assert "Meaning" in response.text
+
+
 def test_lexical_stats_endpoint_returns_summary(monkeypatch):
     _stub_runtime(monkeypatch)
     monkeypatch.setattr(
@@ -272,6 +316,7 @@ def test_lexical_stats_endpoint_returns_summary(monkeypatch):
             "total_alpha_tokens": 100,
             "unique_words": ["mɑ́", "kɑ́"],
             "unique_alpha_words": ["mɑ́", "kɑ́"],
+            "alpha_counts": {},
             "top_words": ["mɑ́\t40", "001\t20"],
             "top_alpha_words": ["mɑ́\t40", "kɑ́\t30"],
             "top_alpha_preview": ["mɑ́\t40", "kɑ́\t30"],
