@@ -551,8 +551,15 @@ def api_audio_get(word: str, audio_id: str | None = None):
 @app.get("/api/stats/frequent-words")
 def api_stats_frequent_words(
     min_letters: int = Query(default=3, ge=1, le=32),
+    max_letters: int | None = Query(default=None, ge=1, le=32),
     limit: int = Query(default=100, ge=1, le=500),
 ):
+    if max_letters is not None and min_letters > max_letters:
+        raise HTTPException(
+            status_code=422,
+            detail="min_letters must be less than or equal to max_letters",
+        )
+
     alpha_counts = LEXICAL_STATS.get("alpha_counts")
     if not alpha_counts:
         raise HTTPException(status_code=503, detail="lexical stats not loaded")
@@ -560,6 +567,7 @@ def api_stats_frequent_words(
     payload = tlr.frequent_alpha_words_by_min_letters(
         alpha_counts,
         min_letters=min_letters,
+        max_letters=max_letters,
         limit=limit,
     )
     return {

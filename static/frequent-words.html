@@ -201,7 +201,7 @@
       <section class="band">
         <h1>Frequent Nufi words</h1>
         <p class="muted">
-          Top words from the full training corpus, filtered by minimum Unicode letter count.
+          Top words from the full training corpus, filtered by Unicode letter count range.
           Tone marks are not counted as letters. Use <strong>Meaning</strong> to look up a word in
           <a href="https://african-polyglot.com/dictionary" target="_blank" rel="noopener noreferrer">African Polyglot</a>.
         </p>
@@ -209,6 +209,10 @@
           <label>
             Minimum letters
             <input id="min-letters" type="number" min="1" max="32" value="4" required />
+          </label>
+          <label>
+            Maximum letters
+            <input id="max-letters" type="number" min="1" max="32" placeholder="No limit" />
           </label>
           <button type="submit">Show top 100</button>
         </form>

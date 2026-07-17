@@ -63,6 +63,34 @@ def test_frequent_alpha_words_by_min_letters():
     assert payload["words"][0]["letter_count"] == 6
     assert payload["words"][1]["letter_count"] == 3
     assert all(item["letter_count"] >= 3 for item in payload["words"])
+    assert "max_letters" not in payload
+
+
+def test_frequent_alpha_words_by_min_and_max_letters():
+    from collections import Counter
+
+    alpha_counts = Counter(
+        {
+            "mɑ́": 40,
+            "kɑ́": 30,
+            "ntúmbō": 25,
+            "ngǔ'": 22,
+            "co": 20,
+            "lī": 15,
+        }
+    )
+
+    payload = reports.frequent_alpha_words_by_min_letters(
+        alpha_counts,
+        min_letters=3,
+        max_letters=4,
+        limit=100,
+    )
+
+    assert payload["max_letters"] == 4
+    assert payload["matching_unique_words"] == 1
+    assert [item["word"] for item in payload["words"]] == ["ngǔ'"]
+    assert payload["words"][0]["letter_count"] == 3
 
 
 def test_iter_filtered_tokens_uses_rhs_of_assignment_lines():

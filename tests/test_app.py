@@ -292,6 +292,41 @@ def test_frequent_words_endpoint_filters_by_min_letters(monkeypatch):
     ]
 
 
+def test_frequent_words_endpoint_filters_by_min_and_max_letters(monkeypatch):
+    from collections import Counter
+
+    _stub_runtime(monkeypatch)
+    monkeypatch.setattr(
+        app.tlr,
+        "build_lexical_report_data",
+        lambda sentence_sources: {
+            "total_tokens": 120,
+            "total_alpha_tokens": 100,
+            "unique_words": ["mɑ́", "kɑ́", "ntúmbō", "ngǔ'"],
+            "unique_alpha_words": ["mɑ́", "kɑ́", "ntúmbō", "ngǔ'"],
+            "alpha_counts": Counter(
+                {"mɑ́": 40, "kɑ́": 30, "ntúmbō": 25, "ngǔ'": 22, "co": 20}
+            ),
+            "top_words": ["mɑ́\t40"],
+            "top_alpha_words": ["mɑ́\t40"],
+            "top_alpha_preview": ["mɑ́\t40"],
+        },
+    )
+
+    with TestClient(app.app) as client:
+        response = client.get("/api/stats/frequent-words?min_letters=3&max_letters=4&limit=100")
+        invalid = client.get("/api/stats/frequent-words?min_letters=6&max_letters=3")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["max_letters"] == 4
+    assert payload["matching_unique_words"] == 1
+    assert payload["words"] == [
+        {"rank": 1, "word": "ngǔ'", "count": 22, "letter_count": 3},
+    ]
+    assert invalid.status_code == 422
+
+
 def test_frequent_words_page_route_serves_html(monkeypatch):
     _stub_runtime(monkeypatch)
 

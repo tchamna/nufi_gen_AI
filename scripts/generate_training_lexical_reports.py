@@ -74,16 +74,18 @@ def count_unicode_letters(word: str) -> int:
 def frequent_alpha_words_by_min_letters(
     alpha_counts: Counter[str],
     min_letters: int = 1,
+    max_letters: int | None = None,
     limit: int = 100,
 ) -> dict[str, object]:
     filtered = [
         (word, count)
         for word, count in alpha_counts.items()
         if count_unicode_letters(word) >= min_letters
+        and (max_letters is None or count_unicode_letters(word) <= max_letters)
     ]
     filtered.sort(key=lambda item: (-item[1], item[0]))
     ranked = filtered[:limit]
-    return {
+    payload: dict[str, object] = {
         "min_letters": min_letters,
         "limit": limit,
         "matching_unique_words": len(filtered),
@@ -98,6 +100,9 @@ def frequent_alpha_words_by_min_letters(
             for index, (word, count) in enumerate(ranked)
         ],
     }
+    if max_letters is not None:
+        payload["max_letters"] = max_letters
+    return payload
 
 
 def _is_alpha_word_token(token: str) -> bool:
